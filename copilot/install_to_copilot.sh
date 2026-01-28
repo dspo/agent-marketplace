@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 usage() {
   cat <<EOF
 Usage: $0 [--global|--local <path>|--uninstall]
@@ -42,7 +44,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-skill_src="$(pwd)/claude/skills/huayi-dev"
+skill_src="${SCRIPT_DIR}/skills/huayi-dev"
 skill_dst_global="$HOME/.copilot/skills/huayi-dev"
 skill_dst_local="$path/.copilot/skills/huayi-dev"
 
@@ -50,6 +52,7 @@ case "$mode" in
   global)
     mkdir -p "$(dirname "$skill_dst_global")"
     cp -R "$skill_src" "$skill_dst_global"
+    chmod +x "$skill_dst_global/scripts/huayi_db.py"
     echo "Installed huayi-dev skill to $skill_dst_global"
     ;;
   local)
@@ -59,6 +62,7 @@ case "$mode" in
     fi
     mkdir -p "$(dirname "$skill_dst_local")"
     cp -R "$skill_src" "$skill_dst_local"
+    chmod +x "$skill_dst_local/scripts/huayi_db.py"
     echo "Installed huayi-dev skill to $skill_dst_local"
     ;;
   uninstall)
