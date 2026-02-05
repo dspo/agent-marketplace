@@ -34,10 +34,10 @@ pip install -e huayi-dev-mcp
 
 ```bash
 # 使用 CLI 添加（推荐）
-claude mcp add --transport stdio huayi-db -- python -m huayi_dev_mcp
+claude mcp add --transport stdio huayi-dev -- python -m huayi_dev_mcp
 
 # 或指定 Python 路径
-claude mcp add --transport stdio huayi-db -- /path/to/python -m huayi_dev_mcp
+claude mcp add --transport stdio huayi-dev -- /path/to/python -m huayi_dev_mcp
 ```
 
 #### OpenAI Codex CLI
@@ -47,10 +47,10 @@ claude mcp add --transport stdio huayi-db -- /path/to/python -m huayi_dev_mcp
 
 ```bash
 # 使用 CLI 添加
-codex mcp add huayi-db -- python -m huayi_dev_mcp
+codex mcp add huayi-dev -- python -m huayi_dev_mcp
 
 # 或指定 Python 路径
-codex mcp add huayi-db -- ~/python-3.13/bin/python -m huayi_dev_mcp
+codex mcp add huayi-dev -- ~/python-3.13/bin/python -m huayi_dev_mcp
 ```
 
 #### GitHub Copilot CLI
