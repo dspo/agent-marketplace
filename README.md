@@ -1,6 +1,6 @@
 # huayi-dev-agent-skills
 
-华艺项目 AI 编码助手数据库开发工具，为 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI 提供安全的 MySQL 数据库只读访问能力。
+花易项目 AI 编码助手数据库开发工具，为 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI 提供安全的 MySQL 数据库只读访问能力。
 
 ## 功能特性
 
@@ -13,16 +13,55 @@
 
 **推荐使用 MCP 方式安装**，提供更好的工具集成体验。
 
+本仓库提供 MCP 和 Skills 两种方式来集成访问花易开发环境数据库的能力，但优先推荐使用 MCP。
+为什么优先推荐使用 MCP？因为 MCP 更加标准和通用，几乎所有 Agent 都支持 MCP，无需额外配置。
+除了 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI，主流的编辑器、IDE 如 VS Code、JetBrains 家族、Trae、Zed 等都能轻易接入。
+而不同的 Agent 对 Skills 的支持方式和支持程度不同，就本仓库而言，已对接且必须分别对接 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI，维护了多份功能几乎一模一样的代码。
+如果要对接更多 Agent，则还要维护更多代码。
+
 ### 1. 安装 MCP Server
 
 ```bash
-cd huayi-dev-mcp
-pip install -e .
+pip install -e huayi-dev-mcp
 ```
+
+### 2. 为 Agent 配置 MCP
+
+#### Claude Code
+
+参见
+[Claude Code install MCP](https://code.claude.com/docs/zh-CN/mcp)
+
+```bash
+# 使用 CLI 添加（推荐）
+claude mcp add --transport stdio huayi-db -- python -m huayi_dev_mcp
+
+# 或指定 Python 路径
+claude mcp add --transport stdio huayi-db -- /path/to/python -m huayi_dev_mcp
+```
+
+#### OpenAI Codex CLI
+
+参见
+[Codex install MCP](https://developers.openai.com/codex/mcp)
+
+```bash
+# 使用 CLI 添加
+codex mcp add huayi-db -- python -m huayi_dev_mcp
+
+# 或指定 Python 路径
+codex mcp add huayi-db -- ~/python-3.13/bin/python -m huayi_dev_mcp
+```
+
+#### GitHub Copilot CLI
+
+参见
+[install-copilot-cli](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-copilot-cli.md)
 
 ### 2. 准备数据库配置文件
 
-默认配置文件路径为当前工作目录下的 `config/config.yaml`，也可通过环境变量 `HUAYI_DEV_MCP_CONFIG` 指定其他路径。
+在安装时不必准备好配置文件，但在使用 MCP 能力时需要提供配置文件以让 MCP 知道如何访问数据库。
+默认配置文件路径为运行 Agent 的当前工作目录下的 `config/config.yaml`，也可通过环境变量 `HUAYI_DEV_MCP_CONFIG` 指定其他路径。
 
 ```yaml
 databases:
@@ -32,6 +71,7 @@ databases:
     host: "db.example.com"
     port: 3306
     username: readonly_user
+    # 支持在配置文件中引用环境变量, 启动 Claude/Codex/Copilot 时提供即可, 避免明文配置密码
     password: ${DB_PROD_PASSWORD}
     database: myapp
 
@@ -45,76 +85,14 @@ databases:
     database: myapp_dev
 ```
 
-### 3. 为 AI 编码助手配置 MCP
-
-#### Claude Code
-
-```bash
-# 使用 CLI 添加（推荐）
-claude mcp add huayi-db -- python -m huayi_dev_mcp
-
-# 或指定 Python 路径
-claude mcp add huayi-db -- /path/to/python -m huayi_dev_mcp
-```
-
-或编辑 `~/.claude/settings.json`：
-
-```json
-{
-  "mcpServers": {
-    "huayi-db": {
-      "command": "python",
-      "args": ["-m", "huayi_dev_mcp"]
-    }
-  }
-}
-```
-
-#### OpenAI Codex CLI
-
-```bash
-# 使用 CLI 添加
-codex mcp add huayi-db -- python -m huayi_dev_mcp
-
-# 或指定 Python 路径
-codex mcp add huayi-db -- ~/python-3.13/bin/python -m huayi_dev_mcp
-```
-
-或编辑 `~/.codex/config.yaml`：
-
-```yaml
-mcp_servers:
-  huayi-db:
-    command: python
-    args:
-      - "-m"
-      - "huayi_dev_mcp"
-```
-
-#### GitHub Copilot CLI
-
-编辑 `~/.config/github-copilot/mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "huayi-db": {
-      "command": "python",
-      "args": ["-m", "huayi_dev_mcp"]
-    }
-  }
-}
-```
-
 ### 4. 设置环境变量
 
-数据库密码通过环境变量传递：
+如果配置文件中引用了环境变量，应当在启动 Agent(Claude, Codex, Copilot 等)时传递：
 
 ```bash
 export DB_PROD_PASSWORD="your_password"
 export DB_DEV_PASSWORD="your_dev_password"
 ```
-
 ---
 
 ## MCP 工具列表
@@ -144,7 +122,7 @@ export DB_DEV_PASSWORD="your_dev_password"
 
 ---
 
-## Skills 安装（传统方式）
+## Skills 安装
 
 如果你的环境不支持 MCP，可以使用传统的 Skills 方式安装。
 
@@ -161,7 +139,3 @@ pip install mcp pyyaml pymysql
 Python 3.10+ 必需。
 
 ---
-
-## License
-
-MIT

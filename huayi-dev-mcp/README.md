@@ -1,6 +1,6 @@
 # Huayi Dev MCP Server
 
-华艺项目数据库开发助手 MCP Server - 为 AI 编码助手提供安全的 MySQL 数据库访问能力。
+花易项目数据库开发助手 MCP Server - 为 AI 编码助手提供安全的 MySQL 数据库访问能力。
 
 > 安装和配置说明请参考 [主 README](../README.md)。
 
