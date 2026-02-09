@@ -1,4 +1,4 @@
-"""Entry point for python -m huayi_dev_mcp."""
+"""Entry point for python -m database_access_mcp."""
 
 from .server import main
 

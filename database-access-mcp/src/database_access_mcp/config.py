@@ -100,11 +100,11 @@ def resolve_instance(config: Dict[str, Dict[str, Any]], instance: str) -> Dict[s
 
 
 def get_config_path() -> str:
-    """Get config path from HUAYI_DEV_MCP_CONFIG environment variable.
+    """Get config path from DATABASE_ACCESS_MCP_CONFIG environment variable.
 
     Falls back to 'config/config.yaml' in current working directory if not set.
     """
-    path = os.getenv("HUAYI_DEV_MCP_CONFIG")
+    path = os.getenv("DATABASE_ACCESS_MCP_CONFIG")
     if not path:
         path = os.path.join(os.getcwd(), "config", "config.yaml")
     return path

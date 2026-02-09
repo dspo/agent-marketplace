@@ -1,4 +1,4 @@
-"""MCP Server for Huayi database development assistant."""
+"""MCP Server for database development assistant."""
 
 import asyncio
 
@@ -7,10 +7,11 @@ from mcp.server.fastmcp import FastMCP
 from . import db_helper
 
 mcp = FastMCP(
-    "huayi-dev-mcp",
-    instructions="""花易数据库开发助手 MCP Server - 提供安全的 MySQL 数据库只读访问能力。
+    "database-access-mcp",
+    instructions="""数据库开发助手 MCP Server - 提供安全的 MySQL 数据库只读访问能力。
 
 使用场景：
+- 找库、找表
 - 查看数据库结构和表定义
 - 获取示例数据了解数据格式
 - 执行只读 SQL 查询分析数据
@@ -22,10 +23,11 @@ mcp = FastMCP(
 - 禁止任何写入或 DDL 操作
 
 典型工作流：
-1. 使用 list_instances 查看可用数据库连接
-2. 使用 list_schemas 或 list_tables 浏览数据库结构
-3. 使用 describe_table 查看表的列定义和索引
-4. 使用 sample_data 或 query 获取数据
+1. 如果没有配置文件，使用 get_config_help 获取配置帮助
+2. 使用 list_instances 查看可用数据库连接
+3. 使用 list_schemas 或 list_tables 浏览数据库结构
+4. 使用 describe_table 查看表的列定义和索引
+5. 使用 sample_data 或 query 获取数据
 """,
 )
 
@@ -211,6 +213,102 @@ async def export_data(
         limit,
         offset,
     )
+
+
+@mcp.tool()
+async def get_config_help() -> dict:
+    """获取配置文件帮助信息。
+
+    当用户不知道如何配置数据库连接时使用此工具。
+    返回配置文件的 JSON Schema 和 YAML 示例。
+    """
+    return {
+        "config_path": {
+            "description": "配置文件路径",
+            "default": "config/config.yaml（当前工作目录下）",
+            "env_var": "DATABASE_ACCESS_MCP_CONFIG",
+        },
+        "schema": {
+            "type": "object",
+            "required": ["databases"],
+            "properties": {
+                "databases": {
+                    "type": "object",
+                    "description": "数据库实例映射，key 为实例别名",
+                    "additionalProperties": {
+                        "type": "object",
+                        "required": ["driver", "host", "username", "password"],
+                        "properties": {
+                            "description": {
+                                "type": "string",
+                                "description": "实例描述（可选）",
+                            },
+                            "driver": {
+                                "type": "string",
+                                "enum": ["mysql"],
+                                "description": "数据库驱动，目前仅支持 mysql",
+                            },
+                            "host": {
+                                "type": "string",
+                                "description": "数据库主机地址",
+                            },
+                            "port": {
+                                "type": "integer",
+                                "default": 3306,
+                                "description": "数据库端口",
+                            },
+                            "username": {
+                                "type": "string",
+                                "description": "数据库用户名",
+                            },
+                            "password": {
+                                "type": "string",
+                                "description": "数据库密码，支持 ${ENV_VAR} 格式引用环境变量",
+                            },
+                            "database": {
+                                "type": "string",
+                                "description": "默认数据库名（可选）",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "example": """# 数据库配置文件示例
+# 保存为 config/config.yaml 或通过 DATABASE_ACCESS_MCP_CONFIG 环境变量指定路径
+
+databases:
+  # 生产环境数据库
+  production:
+    description: 生产环境数据库（只读）
+    driver: mysql
+    host: "db.example.com"
+    port: 3306
+    username: readonly_user
+    # 使用环境变量避免明文密码
+    password: ${DB_PROD_PASSWORD}
+    database: myapp
+
+  # 开发环境数据库
+  development:
+    description: 本地开发数据库
+    driver: mysql
+    host: "localhost"
+    port: 3306
+    username: dev_user
+    password: ${DB_DEV_PASSWORD}
+    database: myapp_dev
+
+  # 也可以直接写密码（不推荐）
+  test:
+    driver: mysql
+    host: "test-db.example.com"
+    port: 3306
+    username: test_user
+    password: "plain_text_password"
+""",
+        "env_vars_hint": "如果配置中使用了 ${VAR} 格式的环境变量，请确保在启动 Agent 前设置这些变量",
+    }
 
 
 async def run_server():

@@ -1,4 +1,4 @@
-"""Huayi Dev MCP Server - Database development assistant."""
+"""Database Access MCP Server - Database development assistant."""
 
 __version__ = "0.1.0"
 

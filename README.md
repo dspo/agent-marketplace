@@ -22,7 +22,7 @@
 ### 1. 安装 MCP Server
 
 ```bash
-pip install -e huayi-dev-mcp
+pip install -e database-access-mcp
 ```
 
 ### 2. 为 Agent 配置 MCP
@@ -34,10 +34,10 @@ pip install -e huayi-dev-mcp
 
 ```bash
 # 使用 CLI 添加（推荐）
-claude mcp add --transport stdio huayi-dev -- python -m huayi_dev_mcp
+claude mcp add --transport stdio database-access -- python -m database_access_mcp
 
 # 或指定 Python 路径
-claude mcp add --transport stdio huayi-dev -- /path/to/python -m huayi_dev_mcp
+claude mcp add --transport stdio database-access -- /path/to/python -m database_access_mcp
 ```
 
 #### OpenAI Codex CLI
@@ -47,10 +47,10 @@ claude mcp add --transport stdio huayi-dev -- /path/to/python -m huayi_dev_mcp
 
 ```bash
 # 使用 CLI 添加
-codex mcp add huayi-dev -- python -m huayi_dev_mcp
+codex mcp add database-access -- python -m database_access_mcp
 
 # 或指定 Python 路径
-codex mcp add huayi-dev -- ~/python-3.13/bin/python -m huayi_dev_mcp
+codex mcp add database-access -- ~/python-3.13/bin/python -m database_access_mcp
 ```
 
 #### GitHub Copilot CLI
@@ -61,7 +61,7 @@ codex mcp add huayi-dev -- ~/python-3.13/bin/python -m huayi_dev_mcp
 ### 2. 准备数据库配置文件
 
 在安装时不必准备好配置文件，但在使用 MCP 能力时需要提供配置文件以让 MCP 知道如何访问数据库。
-默认配置文件路径为运行 Agent 的当前工作目录下的 `config/config.yaml`，也可通过环境变量 `HUAYI_DEV_MCP_CONFIG` 指定其他路径。
+默认配置文件路径为运行 Agent 的当前工作目录下的 `config/config.yaml`，也可通过环境变量 `DATABASE_ACCESS_MCP_CONFIG` 指定其他路径。
 
 ```yaml
 databases:
@@ -108,17 +108,21 @@ export DB_DEV_PASSWORD="your_dev_password"
 | `export_schema` | 导出数据库的完整 schema 结构 |
 | `export_data` | 导出表数据 |
 
-详细参数说明请参考 [huayi-dev-mcp/README.md](huayi-dev-mcp/README.md)。
+详细参数说明请参考 [database-access-mcp/README.md](database-access-mcp/README.md)。
 
 ---
 
 ## 其他安装方式
 
-除了 `python -m huayi_dev_mcp`，还支持：
+除了 `python -m database_access_mcp`，还支持：
 
-- **huayi-dev-mcp 命令**: `pip install -e .` 后直接使用 `huayi-dev-mcp`
-- **uvx**: `uvx --from /path/to/huayi-dev-mcp huayi-dev-mcp`
-- **直接脚本**: `python /path/to/huayi-dev-mcp/src/huayi_dev_mcp/server.py`
+- **database-access-mcp 命令**: `pip install -e .` 后直接使用 `database-access-mcp`
+- **uvx**: 先安装到 uv 环境，然后使用 uvx 运行
+```bash
+uv pip install -e database-access-mcp
+claude mcp add --transport stdio database-access -- uvx database-access-mcp
+```
+- **直接脚本**: `python /path/to/database-access-mcp/src/database_access_mcp/server.py`
 
 ---
 
