@@ -1,0 +1,28 @@
+name: gitlab-dev
+description: |
+  GitLab 项目管理和 CI/CD 开发专家。用于：
+  (1) 管理 Issue 和 Merge Request（查看、创建、更新、合并）
+  (2) 配置和调试 CI/CD Pipeline
+  (3) 构建和推送 Docker 镜像到 Container Registry
+  (4) 代码审查和 MR 评论
+
+  触发场景：用户提到 gitlab、glab、merge request、MR、issue、
+  pipeline、CI/CD、.gitlab-ci.yml、container registry 等关键词时使用此 skill。
+user_invocable: true
+
+dependencies:
+  mcp:
+    - name: gitlab
+      description: GitLab MCP Server
+      required: false
+      check: "检查 mcp-settings.json 中是否配置了 gitlab"
+  cli:
+    - name: glab
+      description: GitLab CLI
+      required: false
+      check: "which glab"
+      install:
+        macos: "brew install glab"
+        linux-apt: "apt install glab"
+        linux-snap: "snap install glab"
+        windows: "winget install glab"
