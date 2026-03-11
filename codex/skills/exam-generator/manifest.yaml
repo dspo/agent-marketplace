@@ -1,0 +1,29 @@
+name: exam-generator
+description: |
+  试卷/试题生成器。用于：
+  (1) 根据知识库和约束条件生成试卷
+  (2) 输出 LaTeX 格式的试卷
+  (3) 编译 LaTeX 为 PDF
+  (4) 检查和安装 LaTeX 依赖
+
+  触发场景：用户提到出题、试卷、试题、考试、笔试、LaTeX、
+  PDF 导出、xelatex、texlive 等关键词时使用此 skill。
+user_invocable: true
+
+files:
+  - skill.md
+  - templates/exam-template.tex
+  - templates/answer-sheet-template.tex
+  - examples/exam-constraints.md
+
+dependencies:
+  cli:
+    - name: xelatex
+      description: XeLaTeX 编译器
+      required: true
+      check: "which xelatex"
+      install:
+        macos: "brew install --cask mactex"
+        macos-minimal: "brew install --cask basictex && sudo tlmgr install ctex xecjk fancyhdr enumitem lastpage booktabs tabularx ulem tikz pifont"
+        ubuntu: "apt-get install texlive-xetex texlive-lang-chinese texlive-fonts-recommended"
+        windows: "下载 MiKTeX 或 TeX Live"

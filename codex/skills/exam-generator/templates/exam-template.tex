@@ -1,0 +1,293 @@
+% ============================================================
+% 试卷模板 - 通用版
+% 使用方法: 复制此文件，根据需要修改配置和内容
+% 编译命令: xelatex exam.tex
+% ============================================================
+
+\documentclass[11pt,a4paper]{article}
+
+% ============ 页面设置 ============
+\usepackage[top=2cm,bottom=2cm,left=2.2cm,right=2.2cm]{geometry}
+
+% ============ 中文支持 ============
+\usepackage{ctex}
+
+% ============ 代码高亮（可选，编程类试卷使用）============
+\usepackage{listings}
+\usepackage{xcolor}
+
+% ============ 列表和枚举 ============
+\usepackage{enumitem}
+
+% ============ 页眉页脚 ============
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+% ============ 表格 ============
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+% ============ 其他 ============
+\usepackage{ulem}      % 下划线
+\usepackage{tikz}      % 绘图
+\usepackage{amssymb}   % 数学符号
+\usepackage{pifont}    % 特殊符号（✓ ✗）
+
+% ============ 字体设置 ============
+% macOS 字体配置
+\setCJKmainfont{Songti SC}[BoldFont={Heiti SC}]
+\setCJKsansfont{Heiti SC}
+\setmainfont{Times New Roman}[BoldFont={Times New Roman Bold}]
+\setmonofont{Menlo}[Scale=0.88]
+
+% Windows 字体配置（取消上面的注释，注释掉 macOS 配置）
+% \setCJKmainfont{SimSun}[BoldFont={SimHei}]
+% \setCJKsansfont{SimHei}
+% \setmainfont{Times New Roman}
+% \setmonofont{Consolas}[Scale=0.88]
+
+% Linux 字体配置（取消上面的注释，注释掉其他配置）
+% \setCJKmainfont{Noto Serif CJK SC}[BoldFont={Noto Sans CJK SC}]
+% \setCJKsansfont{Noto Sans CJK SC}
+% \setmainfont{DejaVu Serif}
+% \setmonofont{DejaVu Sans Mono}[Scale=0.88]
+
+% ============ 代码样式（可选）============
+\definecolor{codebg}{HTML}{F5F5F5}
+\definecolor{codeframe}{HTML}{DDDDDD}
+\definecolor{keyword}{HTML}{0000FF}
+\definecolor{comment}{HTML}{008000}
+\definecolor{stringcol}{HTML}{A31515}
+
+% 定义代码语言（以 Python 为例，可根据需要修改）
+\lstdefinelanguage{Python}{
+  keywords={and,as,assert,break,class,continue,def,del,elif,else,except,
+    finally,for,from,global,if,import,in,is,lambda,not,or,pass,raise,
+    return,try,while,with,yield,True,False,None},
+  sensitive=true,
+  morecomment=[l]{\#},
+  morecomment=[s]{'''}{'''},
+  morecomment=[s]{"""}{"""},
+  morestring=[b]",
+  morestring=[b]',
+}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{keyword}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  stringstyle=\color{stringcol},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  xleftmargin=1em,
+  xrightmargin=0.5em,
+  framexleftmargin=0.5em,
+  numbers=none,
+  breaklines=true,
+  breakatwhitespace=false,
+  tabsize=4,
+  showstringspaces=false,
+  aboveskip=0.8em,
+  belowskip=0.6em,
+  escapeinside={(*}{*)},
+}
+
+% ============ 页眉页脚设置 ============
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyfoot[C]{\small 第 \thepage\ 页 / 共 \pageref{exam:last} 页}
+
+% 修改这里的页眉内容
+\fancyhead[L]{\small XXX 公司 YYY 岗位笔试题（A 卷）}
+\fancyhead[R]{\small\color{red}内部资料 · 禁止外传}
+
+% ============ 列表紧凑 ============
+\setlist{nosep,leftmargin=2em}
+
+% ============ 选项列表环境 ============
+\newlist{choices}{enumerate}{1}
+\setlist[choices]{label=\Alph*.,leftmargin=2.5em,labelsep=0.5em,nosep,topsep=0.3em,itemsep=0.1em}
+
+% ============ 判断题空格 ============
+\newcommand{\tfblank}{\makebox[2em]{\rule[-0.3ex]{1.5em}{0.4pt}}}
+
+% ============ 简答题答题区 ============
+\newcommand{\answerlines}[1]{%
+  \par\vspace{\dimexpr #1\baselineskip + 0.5em\relax}%
+}
+
+% ============================================================
+% 文档内容开始
+% ============================================================
+\begin{document}
+
+% ============ 试卷标题 ============
+\begin{center}
+{\LARGE\bfseries\sffamily XXX 公司 2026 年}
+\hspace{0.5em}
+{\LARGE\bfseries\sffamily YYY 岗位笔试题（A 卷）}
+
+\vspace{0.6em}
+{\large 总分：100 分 \quad 考试时间：100 分钟}
+
+\vspace{0.4em}
+\begin{tabularx}{0.7\textwidth}{Xr}
+姓名：\underline{\hspace{6em}} & 日期：\underline{\hspace{6em}}
+\end{tabularx}
+\end{center}
+
+\vspace{0.3em}
+\noindent\rule{\linewidth}{0.4pt}
+\vspace{0.2em}
+
+% ============ 一、单选题 ============
+\subsection*{一、单选题（每题 3 分，共 30 分）}
+\vspace{0.2em}
+\noindent\small{请将正确选项字母填入题号前的括号内。}
+\vspace{0.3em}
+
+\noindent(\hspace{1.5em})\enspace\textbf{1.} 这是第一道单选题的题目？
+
+\begin{choices}
+\item 选项 A
+\item 选项 B
+\item 选项 C
+\item 选项 D
+\end{choices}
+
+\noindent(\hspace{1.5em})\enspace\textbf{2.} 这是第二道单选题的题目？
+
+\begin{choices}
+\item 选项 A
+\item 选项 B
+\item 选项 C
+\item 选项 D
+\end{choices}
+
+% ... 继续添加更多单选题 ...
+
+% ============ 二、多选题 ============
+\subsection*{二、多选题（每题 4 分，共 20 分，少选错选多选不得分）}
+\vspace{0.2em}
+\noindent\small{请将所有正确选项字母填入题号前的括号内。}
+\vspace{0.3em}
+
+\noindent(\hspace{1.5em})\enspace\textbf{11.} 以下哪些说法是正确的？
+
+\begin{choices}
+\item 选项 A
+\item 选项 B
+\item 选项 C
+\item 选项 D
+\end{choices}
+
+% ... 继续添加更多多选题 ...
+
+% ============ 三、判断题 ============
+\subsection*{三、判断说法正误（每题 2 分，共 20 分，正确打 $\checkmark$，错误打 \ding{55}）}
+\vspace{0.2em}
+\noindent\small{请在题号前的括号内打 $\checkmark$ 或 \ding{55}。}
+\vspace{0.3em}
+
+\noindent(\hspace{1.5em})\enspace\textbf{16.} 这是一个判断题的陈述。
+
+\noindent(\hspace{1.5em})\enspace\textbf{17.} 这是另一个判断题的陈述。
+
+% ... 继续添加更多判断题 ...
+
+% ============ 四、简答题 ============
+\subsection*{四、简答题（共 30 分）}
+\vspace{0.3em}
+
+\noindent\textbf{26.}（10 分）请简述 XXX 的基本原理。
+
+\par\noindent（1）小问 1（3 分）
+\answerlines{4}
+
+\par\noindent（2）小问 2（4 分）
+\answerlines{5}
+
+\par\noindent（3）小问 3（3 分）
+\answerlines{4}
+
+\noindent\textbf{27.}（10 分）阅读以下代码，回答问题。
+
+% 如果有代码题，使用 lstlisting 环境
+\begin{lstlisting}
+def example():
+    print("Hello, World!")
+\end{lstlisting}
+
+\par\noindent（1）这段代码的输出是什么？（3 分）
+\answerlines{3}
+
+\par\noindent（2）请解释代码的工作原理。（7 分）
+\answerlines{6}
+
+\noindent\textbf{28.}（10 分）请比较 A 和 B 两种方法的优缺点。
+
+\answerlines{10}
+
+% ============ 试卷结束标记 ============
+\label{exam:last}
+
+% ============================================================
+% 参考答案（可选，可放在试卷末尾或单独文件）
+% ============================================================
+\newpage
+\setcounter{page}{1}
+\fancyfoot[C]{\small 参考答案 第 \thepage\ 页 / 共 \pageref{ans:last} 页}
+
+\subsection*{参考答案（A卷）}
+
+\subsubsection*{一、单选题}
+1. \textbf{A} — 解析说明。
+
+2. \textbf{C} — 解析说明。
+
+% ... 继续添加答案 ...
+
+\subsubsection*{二、多选题}
+11. \textbf{A, B, D} — 解析说明。
+
+% ... 继续添加答案 ...
+
+\subsubsection*{三、判断题}
+16. \textbf{$\checkmark$} — 解析说明。
+
+17. \textbf{\ding{55}} — 解析说明。
+
+% ... 继续添加答案 ...
+
+\subsubsection*{四、简答题}
+
+\textbf{26.}
+
+（1）答案要点：
+\par\noindent\hspace{1em}$\bullet$ 要点 1
+\par\noindent\hspace{1em}$\bullet$ 要点 2
+
+（2）答案要点：
+\par\noindent\hspace{1em}$\bullet$ 要点 1
+\par\noindent\hspace{1em}$\bullet$ 要点 2
+
+（3）答案要点：
+\par\noindent\hspace{1em}$\bullet$ 要点 1
+
+\textbf{27.}
+
+（1）输出结果。
+
+（2）工作原理解释。
+
+\textbf{28.}
+
+比较分析要点。
+
+\label{ans:last}
+
+\end{document}
