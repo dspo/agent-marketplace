@@ -1,6 +1,10 @@
 {
   "name": "huayi-dev-plugins",
   "description": "花易项目 AI 开发工具集 — 数据库访问、GitLab 助手、Go 规范审查、试卷生成、浏览器自动化",
+  "owner": {
+    "name": "huayi",
+    "url": "https://git.huayi.tech/huayi"
+  },
   "plugins": [
     {
       "name": "database-access",
