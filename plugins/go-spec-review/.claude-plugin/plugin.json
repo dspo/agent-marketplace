@@ -1,0 +1,5 @@
+{
+  "name": "go-spec-review",
+  "description": "Go 规范审查 — 基于 Go 语言规范的代码审查，聚焦语义正确性和边界情况",
+  "version": "1.0.0"
+}

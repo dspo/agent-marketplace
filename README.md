@@ -1,67 +1,75 @@
 # huayi-dev-agent-skills
 
-花易项目 AI 编码助手数据库开发工具，为 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI 提供安全的 MySQL 数据库只读访问能力。
+花易项目 AI 开发工具集，为 Claude Code 提供 Plugin Marketplace，同时支持 OpenAI Codex CLI 和 GitHub Copilot CLI。
 
 ## 功能特性
 
-- **只读访问**: 仅允许 SELECT/SHOW/DESCRIBE/EXPLAIN 查询
-- **自动限制**: 默认 LIMIT 10，防止数据过载
-- **密码保护**: 支持环境变量替换，密码显示时自动掩码
-- **SQL 注入防护**: 参数化查询、标识符转义、多语句阻止
+- **数据库访问** (database-access): 安全连接 MySQL，查询表结构、获取示例数据、执行只读查询
+- **GitLab 助手** (gitlab-dev): 结合 GitLab MCP 和 glab CLI 管理项目、MR、Issue 和 CI/CD
+- **Go 规范审查** (go-spec-review): 基于 Go 语言规范的代码审查，聚焦语义正确性
+- **试卷生成器** (exam-generator): 基于知识库生成专业试卷，LaTeX 排版和 PDF 导出
+- **浏览器自动化** (playwright-cli): 使用 playwright-cli 进行网页测试、截图和数据提取
 
 ## 安装方式
 
-**推荐使用 MCP 方式安装**，提供更好的工具集成体验。
+### 方式 1: Plugin Marketplace（Claude Code 推荐）
 
-本仓库提供 MCP 和 Skills 两种方式来集成访问花易开发环境数据库的能力，但优先推荐使用 MCP。
-为什么优先推荐使用 MCP？因为 MCP 更加标准和通用，几乎所有 Agent 都支持 MCP，无需额外配置。
-除了 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI，主流的编辑器、IDE 如 VS Code、JetBrains 家族、Trae、Zed 等都能轻易接入。
-而不同的 Agent 对 Skills 的支持方式和支持程度不同，就本仓库而言，已对接且必须分别对接 Claude Code、OpenAI Codex CLI 和 GitHub Copilot CLI，维护了多份功能几乎一模一样的代码。
-如果要对接更多 Agent，则还要维护更多代码。
+```bash
+# 从本仓库安装所有 plugins
+/plugin marketplace add /path/to/huayi-dev-agent-skills
 
-### 1. 安装 MCP Server
+# 安装单个 plugin
+/plugin install database-access
+/plugin install gitlab-dev
+/plugin install go-spec-review
+/plugin install exam-generator
+/plugin install playwright-cli
+```
+
+### 方式 2: MCP Server（通用推荐）
+
+数据库访问功能也可通过独立的 MCP Server 安装，适用于所有支持 MCP 的 Agent。
 
 ```bash
 pip install -e database-access-mcp
 ```
 
-### 2. 为 Agent 配置 MCP
-
 #### Claude Code
 
-参见
-[Claude Code install MCP](https://code.claude.com/docs/zh-CN/mcp)
-
 ```bash
-# 使用 CLI 添加（推荐）
 claude mcp add --transport stdio database-access -- python -m database_access_mcp
-
-# 或指定 Python 路径
-claude mcp add --transport stdio database-access -- /path/to/python -m database_access_mcp
 ```
 
 #### OpenAI Codex CLI
 
-参见
-[Codex install MCP](https://developers.openai.com/codex/mcp)
-
 ```bash
-# 使用 CLI 添加
 codex mcp add database-access -- python -m database_access_mcp
-
-# 或指定 Python 路径
-codex mcp add database-access -- ~/python-3.13/bin/python -m database_access_mcp
 ```
 
 #### GitHub Copilot CLI
 
-参见
-[install-copilot-cli](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-copilot-cli.md)
+参见 [install-copilot-cli](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-copilot-cli.md)
 
-### 2. 准备数据库配置文件
+### 方式 3: Skills 安装（传统方式）
 
-在安装时不必准备好配置文件，但在使用 MCP 能力时需要提供配置文件以让 MCP 知道如何访问数据库。
-默认配置文件路径为运行 Agent 的当前工作目录下的 `config/config.yaml`，也可通过环境变量 `DATABASE_ACCESS_MCP_CONFIG` 指定其他路径。
+如果你的环境不支持 Plugin Marketplace 或 MCP，可以使用传统的 Skills 方式安装。
+
+```bash
+# Claude Code
+claude/install_to_claude.sh --global
+
+# OpenAI Codex
+codex/install_to_codex.sh --global
+
+# GitHub Copilot
+copilot/install_to_copilot.sh --global
+```
+
+详细说明请参考 [doc/skills-installation.md](doc/skills-installation.md)。
+
+---
+
+## 数据库配置文件
 
 ```yaml
 databases:
@@ -71,28 +79,10 @@ databases:
     host: "db.example.com"
     port: 3306
     username: readonly_user
-    # 支持在配置文件中引用环境变量, 启动 Claude/Codex/Copilot 时提供即可, 避免明文配置密码
-    password: ${DB_PROD_PASSWORD}
+    password: ${DB_PROD_PASSWORD}  # 支持环境变量替换
     database: myapp
-
-  development:
-    description: 开发环境数据库
-    driver: mysql
-    host: "localhost"
-    port: 3306
-    username: dev_user
-    password: ${DB_DEV_PASSWORD}
-    database: myapp_dev
 ```
 
-### 4. 设置环境变量
-
-如果配置文件中引用了环境变量，应当在启动 Agent(Claude, Codex, Copilot 等)时传递：
-
-```bash
-export DB_PROD_PASSWORD="your_password"
-export DB_DEV_PASSWORD="your_dev_password"
-```
 ---
 
 ## MCP 工具列表
@@ -112,25 +102,21 @@ export DB_DEV_PASSWORD="your_dev_password"
 
 ---
 
-## 其他安装方式
+## 项目结构
 
-除了 `python -m database_access_mcp`，还支持：
-
-- **database-access-mcp 命令**: `pip install -e .` 后直接使用 `database-access-mcp`
-- **uvx**: 先安装到 uv 环境，然后使用 uvx 运行
-```bash
-uv pip install -e database-access-mcp
-claude mcp add --transport stdio database-access -- uvx database-access-mcp
 ```
-- **直接脚本**: `python /path/to/database-access-mcp/src/database_access_mcp/server.py`
-
----
-
-## Skills 安装
-
-如果你的环境不支持 MCP，可以使用传统的 Skills 方式安装。
-
-详细说明请参考 [doc/skills-installation.md](doc/skills-installation.md)。
+├── .claude-plugin/marketplace.json     # Plugin Marketplace 目录
+├── plugins/                            # Plugin 集合
+│   ├── database-access/                # 数据库访问 plugin
+│   ├── gitlab-dev/                     # GitLab 助手 plugin
+│   ├── go-spec-review/                 # Go 规范审查 plugin
+│   ├── exam-generator/                 # 试卷生成器 plugin
+│   └── playwright-cli/                 # 浏览器自动化 plugin
+├── database-access-mcp/                # 独立 MCP Server
+├── claude/                             # Claude Code Skills（传统方式）
+├── codex/                              # OpenAI Codex Skills
+└── copilot/                            # GitHub Copilot Skills
+```
 
 ---
 
@@ -141,5 +127,3 @@ pip install mcp pyyaml pymysql
 ```
 
 Python 3.10+ 必需。
-
----

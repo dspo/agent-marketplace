@@ -1,0 +1,5 @@
+{
+  "name": "exam-generator",
+  "description": "试卷生成器 — 基于知识库生成专业试卷，支持多种题型、LaTeX 排版和 PDF 导出",
+  "version": "1.0.0"
+}

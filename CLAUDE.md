@@ -4,40 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-花易项目 Agent Skills 集合 (Huayi Dev Agent Skills) - A multi-platform AI agent skills repository providing database development assistant capabilities. Enables AI coding assistants (Claude Code, OpenAI Codex, GitHub Copilot) to safely connect to MySQL databases, inspect schemas, query table structures, and retrieve sample data.
+花易项目 AI 开发工具集 (Huayi Dev Agent Skills) - 提供 Claude Code Plugin Marketplace 和多平台 AI Agent Skills。包含数据库访问、GitLab 助手、Go 规范审查、试卷生成、浏览器自动化等能力。
 
 ## Architecture
 
-The project follows a **multi-platform adapter pattern** with three parallel implementations:
+项目采用 **Plugin Marketplace + 多平台适配** 架构：
 
 ```
-├── claude/              # Claude Code integration (flag-based CLI)
-│   └── skills/huayi-dev/scripts/huayi_db.py
-├── codex/               # OpenAI Codex integration (subcommand-based CLI)
-│   └── skills/huayi-dev/scripts/huayi_db_tool.py
-└── copilot/             # GitHub Copilot integration (hybrid CLI - both styles)
-    └── skills/huayi-dev/scripts/huayi_db.py
+├── .claude-plugin/marketplace.json     # Plugin Marketplace 目录
+├── plugins/                            # Plugin 集合（Claude Code 推荐）
+│   ├── database-access/                # 数据库访问（含 MCP 配置）
+│   ├── gitlab-dev/                     # GitLab 助手
+│   ├── go-spec-review/                 # Go 规范审查
+│   ├── exam-generator/                 # 试卷生成器
+│   └── playwright-cli/                 # 浏览器自动化
+├── database-access-mcp/                # 独立 MCP Server（通用）
+├── claude/                             # Claude Code Skills（传统方式）
+├── codex/                              # OpenAI Codex Skills
+└── copilot/                            # GitHub Copilot Skills
 ```
 
-Each platform has its own:
-- Installation script (`install_to_<platform>.sh`)
-- Skill definition file (`.md` format)
-- Python database helper script
-- `requirements.txt` for dependencies
+每个 plugin 包含：
+- `.claude-plugin/plugin.json` — 名称、描述、版本
+- `skills/<name>/SKILL.md` — Skill 定义（frontmatter + 使用说明）
+- 支持文件（scripts, references, templates, examples）
 
-## Installation Commands
+## Installation
+
+### Plugin Marketplace（Claude Code 推荐）
 
 ```bash
-# Claude Code (global)
+/plugin marketplace add /path/to/huayi-dev-agent-skills
+/plugin install database-access
+```
+
+### MCP Server（通用）
+
+```bash
+pip install -e database-access-mcp
+claude mcp add --transport stdio database-access -- python -m database_access_mcp
+```
+
+### Skills（传统方式）
+
+```bash
 claude/install_to_claude.sh --global
-
-# OpenAI Codex (global)
 codex/install_to_codex.sh --global
-
-# GitHub Copilot (global)
 copilot/install_to_copilot.sh --global
-
-# Add --local <path> for project-level installation
 ```
 
 ## Dependencies
@@ -47,24 +60,6 @@ pip install pyyaml pymysql
 ```
 
 Python 3.8+ required (3.10+ recommended).
-
-## CLI Styles
-
-**Claude (flag-based):**
-```bash
-python3 huayi_db.py --config db.yaml --db <alias> --list-tables
-python3 huayi_db.py --config db.yaml --db <alias> --describe <table>
-python3 huayi_db.py --config db.yaml --db <alias> --query "SELECT ..."
-```
-
-**Codex (subcommand-based):**
-```bash
-python3 huayi_db_tool.py list-tables --database-config db.yaml --instance <alias>
-python3 huayi_db_tool.py describe-table --database-config db.yaml --instance <alias> --table <table>
-python3 huayi_db_tool.py query --database-config db.yaml --instance <alias> --sql "SELECT ..."
-```
-
-**Copilot (hybrid - supports both styles)**
 
 ## Database Configuration Format
 
