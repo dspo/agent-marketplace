@@ -14,8 +14,7 @@ This file provides guidance to Claude Code when working in this repository.
 ├── .claude-plugin/marketplace.json     # Claude Code marketplace 清单
 ├── plugins/                            # 唯一源文件
 ├── scripts/sync-skills.py              # Codex/Copilot 兼容导出
-├── doc/skills-installation.md          # 兼容导出说明
-└── database-access-mcp/                # 独立 MCP Server
+└── doc/skills-installation.md          # 兼容导出说明
 ```
 
 每个 plugin 包含：
@@ -31,13 +30,6 @@ This file provides guidance to Claude Code when working in this repository.
 ```bash
 /plugin marketplace add /path/to/huayi-dev-agent-skills
 /plugin install database-access
-```
-
-### MCP Server
-
-```bash
-pip install -e database-access-mcp
-claude mcp add --transport stdio database-access -- python -m database_access_mcp
 ```
 
 ### Compatibility Export

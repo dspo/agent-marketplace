@@ -42,15 +42,6 @@ python3 scripts/sync-skills.py --target copilot --output-dir "$PWD/.copilot/skil
 
 详细说明见 [doc/skills-installation.md](doc/skills-installation.md)。
 
-## 独立 MCP Server
-
-`database-access-mcp/` 仍然是独立维护的通用 MCP Server，可供任意支持 MCP 的客户端接入。
-
-```bash
-pip install -e database-access-mcp
-claude mcp add --transport stdio database-access -- python -m database_access_mcp
-```
-
 ## 项目结构
 
 ```text
@@ -63,8 +54,7 @@ claude mcp add --transport stdio database-access -- python -m database_access_mc
 │   ├── huayi-dev/
 │   └── playwright-cli/
 ├── scripts/sync-skills.py              # Codex/Copilot 兼容导出脚本
-├── doc/skills-installation.md          # 兼容复用指南
-└── database-access-mcp/                # 独立 MCP Server
+└── doc/skills-installation.md          # 兼容复用指南
 ```
 
 ## 依赖
