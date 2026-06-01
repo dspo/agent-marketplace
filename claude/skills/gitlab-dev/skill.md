@@ -5,39 +5,39 @@ description: Guide for GitLab development workflows involving issues, merge requ
 
 # Gitlab dev
 
-本文件是本仓库 GitLab 任务工作流的主说明，避免在 repo-wide 或 path-specific instructions 中重复维护同类规则。
+本文件是在仓库基于 GitLab / Github 工作流的主说明。
 
-当任务涉及 GitLab、Merge Request、Issue、Pipeline、`.gitlab-ci.yml`、GitLab Flow 或 worktree 时，请遵循本说明。
+当任务涉及 GitLab、Merge Request、Issue、Pipeline、`.gitlab-ci.yml`、GitLab Flow、worktree、review MR 时，请遵循本说明。
 
 ## 任务分类
 
-### 全新任务
+按任务的类型，可以分为：
 
-1. 先从 GitLab 读取对应 Issue 或任务上下文。
-2. 同步远端默认分支的最新内容。
-3. 从最新默认分支切出新分支。
-4. 为该分支创建独立 worktree，并在该 worktree 中独立完成实现。
-5. 完成验证、提交、推送，并创建新的 **Merge Request** 交付成果。
+- 开发：新功能设计、开发，Bugfix，重构等。
+- Review：审查给定的 MR / PR.
 
-### 继续任务
+按 Agent 介入的时机，可以将任务分为：
 
-1. 先定位该任务已有的 Issue、MR、Branch 和 Worktree。
-2. 如果这些资产已经存在，优先复用，不要重复创建分支、worktree 或 MR。
-3. 在原 branch / worktree 基础上补齐未完成项、修复缺陷并继续推进。
-4. 最终更新同一个 MR 交付结果。
+- 全新任务
+- 中继任务
 
-### Review 任务
+接手一个任务后，如果已有独立 worktree，应当找到对应的 worktree，在该 worktree 上工作。
+如果没有独立 worktree，应当先 **git fetch 远端最新主分支**，基于远端最新主分支，创建独立 worktree，再在该 worktree 上工作。
 
-1. 先定位该任务对应的 Issue、MR、Branch 和 Worktree。
-2. 能在本地完成 review 时，优先使用本地 checkout、diff、流水线状态和相关代码做 review，以降低在线 review 的成本。
-3. Review 结论必须回写到 GitLab：优先使用 `glab`；只有 `glab` 明显不支持或受限时，再回退到 GitLab MCP。
-4. 最终交付物应是已经提交到 MR 评论区的 review 意见，而不是仅在本地口头总结。
+对于全新开发任务，应当充分理解用户需求。如果已有 Issue，应当先读取 Issue，如果没有 Issue，可选先创建 Issue。
+对于先进行 plan 的任务，应当将 plan 原文终稿作为 Issue 的正文，若无须 Issue，则应当作为 MR 的描述正文。
+对于开发任务，应当完成验证、提交、推送，并创建新的 **Merge Request** 交付成果。
 
-### 其他任务
+对于中继任务，应当先获取到相关 Issue、MR、Branch、Worktree、Plan、目标等背景。
+如果这些资产已存在，则优先复用。如无，则按需创建。
+一般来说，应当基于原 branch / worktree 补完未完成的工作、修复未完成的缺陷，更新原 MR。
 
-1. 对流水线、评论、状态检查、杂项维护等 GitLab 任务，优先使用 `glab`。
-2. 只有 `glab` 明显不支持时，才回退到 GitLab MCP。
-3. 无论任务类型如何，只要任务属于 GitLab 工作流，最终都要落实到对应 GitLab 对象上，而不是停留在本地。
+对于 Review 任务，应当先定位该任务对应的 Issue、MR、Branch 和 Worktree。
+尝试找到 MR 在本地的 worktree。优先在本地 worktree 进行 review，降低现在 review 的成本。
+有时 review 还要关注流水线状态。
+review 结果要口头汇报，同时在 MR 评论区留痕。
+
+无论任务类型如何，只要任务属于 GitLab 工作流，最终都要落实到对应 GitLab 对象上，而不是停留在本地。
 
 ## 执行原则
 
@@ -55,11 +55,64 @@ description: Guide for GitLab development workflows involving issues, merge requ
 
 ## 工具优先级
 
-1. 操作 Git 仓库（branch、commit、rebase、worktree、diff、fetch、push 等）时，优先使用 `git`。
-2. 操作 GitLab 对象（MR、Issue、评论、Pipeline、状态检查等）时，优先使用 `glab`，GitLab MCP 作为后备。
-3. 只有在前序工具不支持所需动作时，才回退到后序工具。
-4. 如果 GitLab 认证或权限失败，要明确说明阻塞点，并引导恢复访问。
-5. 如果必须用 `glab`，但本机缺失或未认证，也要明确指出，而不是静默放弃 GitLab 工作流。
+1. 操作 Git 仓库（branch、commit、rebase、worktree、diff、fetch、push 等）使用 `git`。
+2. 操作 GitLab 对象（MR、Issue、评论、Pipeline、状态检查等）使用 `glab`。
+3. 如果 GitLab 认证或权限失败，要明确说明阻塞点，并引导恢复访问。
+4. 如果非要使用 gitlab mcp 不可，但本机缺失或未认证，也要明确指出，而不是静默放弃 GitLab 工作流。如需要认证，应当主动触发打开浏览器请用户进行认证，而不是要求用户拷贝链接到浏览器中打开进行认证。
+
+```bash
+glab -h
+
+ GLab is an open source GitLab CLI tool that brings GitLab to your command line.
+
+ USAGE
+
+
+   glab <command> <subcommand> [command] [--flags]
+
+
+ COMMANDS
+
+   alias [command] [--flags]                  Create, list, and delete aliases.
+   api <endpoint> [--flags]                   Make an authenticated request to the GitLab API.
+   attestation <command> [command] [--flags]  Manage software attestations. (EXPERIMENTAL)
+   auth <command> [command]                   Manage glab's authentication state.
+   changelog <command> [command] [--flags]    Interact with the changelog API.
+   check-update                               Check for latest glab releases.
+   ci <command> [command] [--flags]           Work with GitLab CI/CD pipelines and jobs.
+   cluster <command> [command] [--flags]      Manage GitLab Agents for Kubernetes and their clusters.
+   completion [--flags]                       Generate shell completion scripts.
+   config [command] [--flags]                 Manage glab settings.
+   deploy-key <command> [command] [--flags]   Manage deploy keys.
+   duo <command> prompt [command]             Work with GitLab Duo
+   gpg-key <command> [command] [--flags]      Manage GPG keys registered with your GitLab account.
+   help [command]                             Help about any command
+   incident [command] [--flags]               Work with GitLab incidents.
+   issue [command] [--flags]                  Work with GitLab issues.
+   iteration <command> [command] [--flags]    Retrieve iteration information.
+   job <command> [command] [--flags]          Work with GitLab CI/CD jobs.
+   label <command> [command] [--flags]        Manage labels on remote.
+   mcp <command> [command]                    Work with a Model Context Protocol (MCP) server. (EXPERIMENTAL)
+   milestone <command> [command] [--flags]    Manage group or project milestones.
+   mr <command> [command] [--flags]           Create, view, and manage merge requests.
+   opentofu <command> [command] [--flags]     Work with the OpenTofu or Terraform integration.
+   release <command> [command] [--flags]      Manage GitLab releases.
+   repo <command> [command] [--flags]         Work with GitLab repositories and projects.
+   schedule <command> [command] [--flags]     Work with GitLab CI/CD schedules.
+   securefile <command> [command] [--flags]   Manage secure files for a project.
+   snippet <command> [command] [--flags]      Create, view and manage snippets.
+   ssh-key <command> [command] [--flags]      Manage SSH keys registered with your GitLab account.
+   stack <command> [command] [--flags]        Create, manage, and work with stacked diffs. (EXPERIMENTAL)
+   token [command] [--flags]                  Manage personal, project, or group tokens
+   user <command> [command] [--flags]         Interact with a GitLab user account.
+   variable [command] [--flags]               Manage variables for a GitLab project or group.
+   version                                    Show version information for glab.
+
+ FLAGS
+
+   -h --help                                  Show help for this command.
+   -v --version                               Show glab version information
+```
 
 ## 偏好
 
