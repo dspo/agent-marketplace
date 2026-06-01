@@ -27,6 +27,11 @@
       "source": "./plugins/exam-generator"
     },
     {
+      "name": "huayi-dev",
+      "description": "花易项目数据库开发助手 — 安全连接 MySQL，查询表结构、获取示例数据、执行只读查询",
+      "source": "./plugins/huayi-dev"
+    },
+    {
       "name": "playwright-cli",
       "description": "浏览器自动化 — 使用 playwright-cli 进行网页测试、表单填写、截图和数据提取",
       "source": "./plugins/playwright-cli"

@@ -1,5 +1,27 @@
 ---
+name: go-spec-review
 description: Go 规范审查 — 基于 Go 语言规范的代码审查，聚焦语义正确性和边界情况
+commands:
+- name: go-collect
+  description: 收集 Go 项目上下文信息（go.mod、构建约束、变更文件）
+  script: scripts/collect_context.go
+  args:
+  - --repo
+  - --base
+  - --head
+  - --max-files
+- name: go-risk
+  description: 扫描 Go 代码中的 spec 风险区域
+  script: scripts/risk_sweep.go
+  args:
+  - --repo
+  - --base
+  - --head
+- name: go-check
+  description: 轻量级 Go 代码检查
+  script: scripts/light_checks.go
+  args:
+  - --repo
 ---
 
 # Go spec-based review
@@ -11,10 +33,10 @@ Use the Go language specification as the source of truth for language semantics 
 ## Review workflow
 
 0) (Optional) Run helper scripts (fast context + red flags)
-   - Scripts live under `${CLAUDE_PLUGIN_ROOT}/skills/go-spec-review/scripts/`.
-   - `go run ${CLAUDE_PLUGIN_ROOT}/skills/go-spec-review/scripts/collect_context.go --repo <repo> --base <git-ref>`
-   - `go run ${CLAUDE_PLUGIN_ROOT}/skills/go-spec-review/scripts/risk_sweep.go --repo <repo> --base <git-ref>`
-   - `go run ${CLAUDE_PLUGIN_ROOT}/skills/go-spec-review/scripts/light_checks.go --repo <repo>`
+   - Scripts live under `${COPILOT_PLUGIN_ROOT}/skills/go-spec-review/scripts/`.
+   - `go run ${COPILOT_PLUGIN_ROOT}/skills/go-spec-review/scripts/collect_context.go --repo <repo> --base <git-ref>`
+   - `go run ${COPILOT_PLUGIN_ROOT}/skills/go-spec-review/scripts/risk_sweep.go --repo <repo> --base <git-ref>`
+   - `go run ${COPILOT_PLUGIN_ROOT}/skills/go-spec-review/scripts/light_checks.go --repo <repo>`
    - Notes:
      - These scripts are heuristics; confirm findings against the spec.
      - Prefer passing `--repo` explicitly; don't assume the current working directory.
@@ -30,7 +52,7 @@ Use the Go language specification as the source of truth for language semantics 
    - **Key functions/symbols**: if the user names functions/types, locate and review only those definitions plus their immediate callers.
 
 3) Run a "spec risk areas" sweep
-   - Read `${CLAUDE_PLUGIN_ROOT}/skills/go-spec-review/references/spec-review-checklist.md` and scan for language-edge cases.
+   - Read `${COPILOT_PLUGIN_ROOT}/skills/go-spec-review/references/spec-review-checklist.md` and scan for language-edge cases.
    - Explicitly call out reliance on unspecified/nondeterministic behavior.
 
 4) Produce actionable findings

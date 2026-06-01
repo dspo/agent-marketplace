@@ -1,0 +1,27 @@
+# Copilot skill configuration
+# This file is the source of truth for Copilot commands generation.
+# Edit it manually, then run: python scripts/sync-skills.py --skill go-spec-review
+
+commands:
+  - name: go-collect
+    description: 收集 Go 项目上下文信息（go.mod、构建约束、变更文件）
+    script: scripts/collect_context.go
+    args:
+      - --repo
+      - --base
+      - --head
+      - --max-files
+
+  - name: go-risk
+    description: 扫描 Go 代码中的 spec 风险区域
+    script: scripts/risk_sweep.go
+    args:
+      - --repo
+      - --base
+      - --head
+
+  - name: go-check
+    description: 轻量级 Go 代码检查
+    script: scripts/light_checks.go
+    args:
+      - --repo

@@ -1,27 +1,6 @@
 ---
 name: huayi-dev
 description: 花易项目数据库开发助手 - 连接数据库、查询表结构、获取示例数据。支持环境检查、依赖安装、多种安装位置自动检测。
-commands:
-- name: huayi-db
-  description: Config-aware MySQL inspection and safe queries
-  script: scripts/huayi_db.py
-  args:
-  - --database-config
-  - --config
-  - list-instances
-  - list-schemas
-  - list-tables
-  - describe-table
-  - sample-data
-  - query
-  - export-schema
-  - export-data
-  - --instance
-  - --db
-  - --database
-  - --table
-  - --limit
-  - --json
 ---
 
 # Huayi Dev

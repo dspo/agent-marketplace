@@ -1,0 +1,21 @@
+# Copilot skill configuration
+# This file is the source of truth for Copilot commands generation.
+# Edit it manually, then run: python scripts/sync-skills.py --skill database-access
+
+commands:
+  - name: da
+    description: 花易项目数据库开发工具 — 安全连接 MySQL，查询表结构、获取示例数据
+    script: scripts/da.py
+    args:
+      - --config
+      - --db
+      - --database
+      - --list-databases
+      - --list-schemas
+      - --list-tables
+      - --describe
+      - --sample
+      - --query
+      - --export-schema
+      - --limit
+      - --json
