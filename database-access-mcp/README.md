@@ -2,7 +2,7 @@
 
 MCP Server providing secure read-only MySQL database access for AI coding assistants.
 
-为 AI 编码助手（Claude Code、OpenAI Codex CLI、GitHub Copilot 等）提供安全的 MySQL 数据库只读访问能力。
+为 Claude Code 及其他支持 MCP 的客户端提供安全的 MySQL 数据库只读访问能力。
 
 ## Features
 
@@ -31,9 +31,12 @@ pip install -e .
 claude mcp add --transport stdio database-access -- python -m database_access_mcp
 ```
 
-**OpenAI Codex CLI:**
+**Other MCP clients:**
+
+Register the same stdio command in your client-specific MCP configuration:
+
 ```bash
-codex mcp add database-access -- python -m database_access_mcp
+python -m database_access_mcp
 ```
 
 ### 2. Create database configuration

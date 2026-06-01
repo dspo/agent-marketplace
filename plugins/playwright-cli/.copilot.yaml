@@ -1,6 +1,6 @@
-# Copilot skill configuration
-# This file is the source of truth for Copilot commands generation.
-# Edit it manually, then run: python scripts/sync-skills.py --skill playwright-cli
+# Copilot compatibility configuration
+# This file is source input for on-demand Copilot export.
+# Run: python scripts/sync-skills.py --target copilot --output-dir <path> --skill playwright-cli
 #
 # NOTE: playwright-cli is a descriptive skill that wraps the external
 # `playwright-cli` tool. No custom commands are defined here.

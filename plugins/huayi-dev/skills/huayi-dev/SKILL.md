@@ -17,8 +17,7 @@ Use this skill to discover Huayi database models and sample data from configured
 
 | 安装方式 | 脚本路径 | requirements.txt 路径 |
 |---------|---------|----------------------|
-| 全局安装 | `~/.codex/skills/huayi-dev/scripts/huayi_db_tool.py` | `~/.codex/skills/huayi-dev/scripts/requirements.txt` |
-| 项目安装 | `.codex/skills/huayi-dev/scripts/huayi_db_tool.py` | `.codex/skills/huayi-dev/scripts/requirements.txt` |
+| Marketplace 安装 | `${CLAUDE_PLUGIN_ROOT}/skills/huayi-dev/scripts/huayi_db_tool.py` | `${CLAUDE_PLUGIN_ROOT}/skills/huayi-dev/scripts/requirements.txt` |
 
 **重要**：执行脚本前必须先确定正确的路径。
 
@@ -28,19 +27,13 @@ Use this skill to discover Huayi database models and sample data from configured
 
 ### Step 1: 确定脚本位置
 
-按优先级检查脚本是否存在：
-1. 先检查项目目录：`.codex/skills/huayi-dev/scripts/huayi_db_tool.py`
-2. 再检查全局目录：`~/.codex/skills/huayi-dev/scripts/huayi_db_tool.py`
+优先使用当前 plugin 安装目录中的脚本：
 
 ```bash
-# 检查项目目录
-ls -la .codex/skills/huayi-dev/scripts/huayi_db_tool.py 2>/dev/null
-
-# 检查全局目录
-ls -la ~/.codex/skills/huayi-dev/scripts/huayi_db_tool.py 2>/dev/null
+ls -la "${CLAUDE_PLUGIN_ROOT}/skills/huayi-dev/scripts/huayi_db_tool.py"
 ```
 
-使用找到的第一个路径作为 `SCRIPT_PATH`，对应的 requirements.txt 在同目录下。
+使用该路径作为 `SCRIPT_PATH`，对应的 requirements.txt 在同目录下。
 
 ### Step 2: 获取 Python 环境信息
 
@@ -176,16 +169,11 @@ databases:
 首先检查脚本安装位置，确定 `SCRIPT_PATH` 和 `REQUIREMENTS_PATH`：
 
 ```bash
-# 检查项目目录是否有脚本
-ls -la .codex/skills/huayi-dev/scripts/huayi_db_tool.py 2>/dev/null
-
-# 检查全局目录是否有脚本
-ls -la ~/.codex/skills/huayi-dev/scripts/huayi_db_tool.py 2>/dev/null
+ls -la "${CLAUDE_PLUGIN_ROOT}/skills/huayi-dev/scripts/huayi_db_tool.py"
 ```
 
-- 如果项目目录存在，使用项目目录路径
-- 否则使用全局目录路径
-- 如果都不存在，提示用户先安装 skill
+- 使用 `${CLAUDE_PLUGIN_ROOT}` 下的脚本路径
+- 如果路径不存在，提示用户先通过 Claude Code marketplace 安装 plugin
 
 ### 步骤 2：检查 Python 环境
 

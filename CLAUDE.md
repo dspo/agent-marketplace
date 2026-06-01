@@ -1,57 +1,59 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working in this repository.
 
 ## Project Overview
 
-花易项目 AI 开发工具集 (Huayi Dev Agent Skills) - 提供 Claude Code Plugin Marketplace 和多平台 AI Agent Skills。包含数据库访问、GitLab 助手、Go 规范审查、试卷生成、浏览器自动化等能力。
+本仓库的目标已经固定为 **维护 Claude Code Plugin Marketplace**。请把 `.claude-plugin/marketplace.json` 和 `plugins/` 视为唯一长期维护面；`plugins/` 是唯一 source of truth。
+
+不要再把本仓库当成多平台 skill 仓库来维护。`codex/`、`copilot/` 目录不再提交到仓库；如需兼容这两个平台，只能通过导出脚本按需生成外部产物。
 
 ## Architecture
 
-项目采用 **Plugin Marketplace + 多平台适配** 架构：
-
-```
-├── .claude-plugin/marketplace.json     # Plugin Marketplace 目录
-├── plugins/                            # Plugin 集合（Claude Code 推荐）
-│   ├── database-access/                # 数据库访问（含 MCP 配置）
-│   ├── gitlab-dev/                     # GitLab 助手
-│   ├── go-spec-review/                 # Go 规范审查
-│   ├── exam-generator/                 # 试卷生成器
-│   └── playwright-cli/                 # 浏览器自动化
-├── database-access-mcp/                # 独立 MCP Server（通用）
-├── claude/                             # Claude Code Skills（传统方式）
-├── codex/                              # OpenAI Codex Skills
-└── copilot/                            # GitHub Copilot Skills
+```text
+├── .claude-plugin/marketplace.json     # Claude Code marketplace 清单
+├── plugins/                            # 唯一源文件
+├── scripts/sync-skills.py              # Codex/Copilot 兼容导出
+├── doc/skills-installation.md          # 兼容导出说明
+├── claude/                             # Claude 侧遗留安装辅助
+└── database-access-mcp/                # 独立 MCP Server
 ```
 
 每个 plugin 包含：
-- `.claude-plugin/plugin.json` — 名称、描述、版本
-- `skills/<name>/SKILL.md` — Skill 定义（frontmatter + 使用说明）
+- `.claude-plugin/plugin.json`
+- `skills/<name>/SKILL.md`
 - 支持文件（scripts, references, templates, examples）
+- 可选的 `.copilot.yaml`，仅用于生成 Copilot 兼容导出
 
 ## Installation
 
-### Plugin Marketplace（Claude Code 推荐）
+### Claude Code Marketplace
 
 ```bash
 /plugin marketplace add /path/to/huayi-dev-agent-skills
 /plugin install database-access
 ```
 
-### MCP Server（通用）
+### MCP Server
 
 ```bash
 pip install -e database-access-mcp
 claude mcp add --transport stdio database-access -- python -m database_access_mcp
 ```
 
-### Skills（传统方式）
+### Compatibility Export
 
 ```bash
-claude/install_to_claude.sh --global
-codex/install_to_codex.sh --global
-copilot/install_to_copilot.sh --global
+python3 scripts/sync-skills.py --target codex --output-dir ~/.codex/skills --all
+python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill database-access
 ```
+
+## Maintenance Rules
+
+1. 新增或修改能力时，只改 `plugins/` 与 marketplace 元数据。
+2. 不要重新引入已提交的 `codex/`、`copilot/` 目录。
+3. Copilot 相关配置只保留在 plugin 内的 `.copilot.yaml`，作为导出时的输入。
+4. 如果 plugin 文档里出现平台路径，优先写 `${CLAUDE_PLUGIN_ROOT}`，再由导出脚本做目标平台替换。
 
 ## Dependencies
 
@@ -59,26 +61,4 @@ copilot/install_to_copilot.sh --global
 pip install pyyaml pymysql
 ```
 
-Python 3.8+ required (3.10+ recommended).
-
-## Database Configuration Format
-
-```yaml
-databases:
-  <alias>:
-    description: Database description
-    driver: mysql
-    host: "hostname"
-    port: 3306
-    username: user
-    password: ${ENV_VAR_NAME}  # Environment variable substitution
-    database: database_name
-```
-
-## Security Constraints
-
-All implementations enforce:
-- **Read-only**: Only SELECT queries allowed (DDL/DML blocked)
-- **Automatic LIMIT**: Default LIMIT 10 on all queries
-- **Password protection**: Environment variable substitution for secrets
-- **SQL injection prevention**: Parameterized queries, identifier quoting, multi-statement blocking
+Python 3.10+ required.

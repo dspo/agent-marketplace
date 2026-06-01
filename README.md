@@ -1,24 +1,13 @@
 # huayi-dev-agent-skills
 
-花易项目 AI 开发工具集，为 Claude Code 提供 Plugin Marketplace，同时支持 OpenAI Codex CLI 和 GitHub Copilot CLI。
+花易项目的 **Claude Code Plugin Marketplace** 仓库。这里长期维护的只有 Claude Code marketplace 元数据和 `plugins/` 源文件；`plugins/` 是唯一 source of truth。
 
-## 功能特性
+**不会再在仓库内长期维护** `codex/`、`copilot/` 这类平台产物目录。如果需要给 Codex 或 Copilot 复用本仓库的 plugin/skill，请按需从 `plugins/` 导出兼容产物。
 
-- **数据库访问** (database-access): 安全连接 MySQL，查询表结构、获取示例数据、执行只读查询
-- **GitLab 助手** (gitlab-dev): 结合 GitLab MCP 和 glab CLI 管理项目、MR、Issue 和 CI/CD
-- **Go 规范审查** (go-spec-review): 基于 Go 语言规范的代码审查，聚焦语义正确性
-- **试卷生成器** (exam-generator): 基于知识库生成专业试卷，LaTeX 排版和 PDF 导出
-- **浏览器自动化** (playwright-cli): 使用 playwright-cli 进行网页测试、截图和数据提取
-
-## 安装方式
-
-### 方式 1: Plugin Marketplace（Claude Code 推荐）
+## Claude Code 使用方式
 
 ```bash
-# 从本仓库安装所有 plugins
 /plugin marketplace add /path/to/huayi-dev-agent-skills
-
-# 安装单个 plugin
 /plugin install database-access
 /plugin install gitlab-dev
 /plugin install go-spec-review
@@ -26,104 +15,63 @@
 /plugin install playwright-cli
 ```
 
-### 方式 2: MCP Server（通用推荐）
+## 仓库定位
 
-数据库访问功能也可通过独立的 MCP Server 安装，适用于所有支持 MCP 的 Agent。
+1. `.claude-plugin/marketplace.json` 定义 marketplace。
+2. `plugins/<name>/` 保存每个 Claude Code plugin 的唯一源文件。
+3. `scripts/sync-skills.py` 只负责按需导出 Codex/Copilot 兼容技能，不再生成并维护仓库内目录。
+
+## Codex / Copilot 复用口子
+
+需要复用时，直接从 `plugins/` 导出到目标目录：
+
+```bash
+# 导出到 Codex
+python3 scripts/sync-skills.py --target codex --output-dir ~/.codex/skills --all
+
+# 导出单个 plugin 到 Copilot
+python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill database-access
+```
+
+也可以导出到项目本地目录：
+
+```bash
+python3 scripts/sync-skills.py --target codex --output-dir "$PWD/.codex/skills" --all
+python3 scripts/sync-skills.py --target copilot --output-dir "$PWD/.copilot/skills" --all
+```
+
+详细说明见 [doc/skills-installation.md](doc/skills-installation.md)。
+
+## 独立 MCP Server
+
+`database-access-mcp/` 仍然是独立维护的通用 MCP Server，可供任意支持 MCP 的客户端接入。
 
 ```bash
 pip install -e database-access-mcp
-```
-
-#### Claude Code
-
-```bash
 claude mcp add --transport stdio database-access -- python -m database_access_mcp
 ```
 
-#### OpenAI Codex CLI
-
-```bash
-codex mcp add database-access -- python -m database_access_mcp
-```
-
-#### GitHub Copilot CLI
-
-参见 [install-copilot-cli](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-copilot-cli.md)
-
-### 方式 3: Skills 安装（传统方式）
-
-如果你的环境不支持 Plugin Marketplace 或 MCP，可以使用传统的 Skills 方式安装。
-
-```bash
-# Claude Code
-claude/install_to_claude.sh --global
-
-# OpenAI Codex
-codex/install_to_codex.sh --global
-
-# GitHub Copilot
-copilot/install_to_copilot.sh --global
-```
-
-详细说明请参考 [doc/skills-installation.md](doc/skills-installation.md)。
-
----
-
-## 数据库配置文件
-
-```yaml
-databases:
-  production:
-    description: 生产环境数据库
-    driver: mysql
-    host: "db.example.com"
-    port: 3306
-    username: readonly_user
-    password: ${DB_PROD_PASSWORD}  # 支持环境变量替换
-    database: myapp
-```
-
----
-
-## MCP 工具列表
-
-| 工具 | 说明 |
-|------|------|
-| `list_instances` | 列出所有配置的数据库实例 |
-| `list_schemas` | 列出数据库实例中的所有 schema |
-| `list_tables` | 列出数据库中的所有表 |
-| `describe_table` | 获取表的详细结构信息 |
-| `sample_data` | 获取表的示例数据 |
-| `query` | 执行只读 SQL 查询 |
-| `export_schema` | 导出数据库的完整 schema 结构 |
-| `export_data` | 导出表数据 |
-
-详细参数说明请参考 [database-access-mcp/README.md](database-access-mcp/README.md)。
-
----
-
 ## 项目结构
 
+```text
+├── .claude-plugin/marketplace.json     # Claude Code marketplace 目录
+├── plugins/                            # 唯一源文件
+│   ├── database-access/
+│   ├── gitlab-dev/
+│   ├── go-spec-review/
+│   ├── exam-generator/
+│   ├── huayi-dev/
+│   └── playwright-cli/
+├── scripts/sync-skills.py              # Codex/Copilot 兼容导出脚本
+├── doc/skills-installation.md          # 兼容复用指南
+├── claude/                             # Claude 侧遗留安装辅助
+└── database-access-mcp/                # 独立 MCP Server
 ```
-├── .claude-plugin/marketplace.json     # Plugin Marketplace 目录
-├── plugins/                            # Plugin 集合
-│   ├── database-access/                # 数据库访问 plugin
-│   ├── gitlab-dev/                     # GitLab 助手 plugin
-│   ├── go-spec-review/                 # Go 规范审查 plugin
-│   ├── exam-generator/                 # 试卷生成器 plugin
-│   └── playwright-cli/                 # 浏览器自动化 plugin
-├── database-access-mcp/                # 独立 MCP Server
-├── claude/                             # Claude Code Skills（传统方式）
-├── codex/                              # OpenAI Codex Skills
-└── copilot/                            # GitHub Copilot Skills
-```
-
----
 
 ## 依赖
 
 ```bash
-pip install mcp pyyaml pymysql
+pip install pyyaml pymysql
 ```
 
-Python 3.10+ 必需。
+Python 3.10+ required.

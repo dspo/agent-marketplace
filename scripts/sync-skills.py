@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 """
-Sync Plugin Marketplace skills to Claude Code (legacy), Codex, and Copilot formats.
+Export marketplace plugin skills to Codex or Copilot compatibility bundles.
 
 Usage:
-    python scripts/sync-skills.py --all
-    python scripts/sync-skills.py --skill <name>
     python scripts/sync-skills.py --list
-
-Source of truth: plugins/<name>/  (Plugin Marketplace format)
-Generated targets:
-    - codex/skills/<name>/
-    - copilot/skills/<name>/
-    - claude/skills/<name>/  (legacy, kept for backward compatibility)
+    python scripts/sync-skills.py --target codex --output-dir ~/.codex/skills --all
+    python scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill <name>
 """
 
 import argparse
@@ -23,20 +17,14 @@ from typing import Optional
 
 REPO_ROOT = Path(__file__).parent.parent.resolve()
 PLUGINS_DIR = REPO_ROOT / "plugins"
-CODEX_DIR = REPO_ROOT / "codex" / "skills"
-COPILOT_DIR = REPO_ROOT / "copilot" / "skills"
-CLAUDE_DIR = REPO_ROOT / "claude" / "skills"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def find_plugins() -> list[str]:
-    """Return list of plugin names under plugins/."""
     if not PLUGINS_DIR.exists():
         return []
     return sorted(
-        d.name for d in PLUGINS_DIR.iterdir()
+        d.name
+        for d in PLUGINS_DIR.iterdir()
         if d.is_dir() and (d / ".claude-plugin" / "plugin.json").exists()
     )
 
@@ -51,7 +39,6 @@ def write_file(path: Path, content: str) -> None:
 
 
 def copy_skill_tree(src: Path, dst: Path) -> None:
-    """Copy directory tree, renaming SKILL.md -> skill.md on the fly."""
     if not src.exists():
         return
 
@@ -60,25 +47,23 @@ def copy_skill_tree(src: Path, dst: Path) -> None:
 
     for item in src.rglob("*"):
         rel = item.relative_to(src)
-        # Rename SKILL.md -> skill.md in target path
-        target_name = rel.name
-        if target_name == "SKILL.md":
-            target_name = "skill.md"
+        target_name = "skill.md" if rel.name == "SKILL.md" else rel.name
         target = dst / rel.parent / target_name
 
         if item.is_dir():
             target.mkdir(parents=True, exist_ok=True)
-        else:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, target)
+            continue
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, target)
 
 
 def parse_frontmatter(text: str) -> tuple[dict, str]:
-    """Parse YAML frontmatter from markdown text. Returns (metadata, body)."""
     if text.startswith("---"):
         parts = text.split("---", 2)
         if len(parts) >= 3:
             import yaml
+
             try:
                 meta = yaml.safe_load(parts[1])
                 body = parts[2].strip()
@@ -89,15 +74,31 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
 
 
 def build_frontmatter(data: dict) -> str:
-    """Build YAML frontmatter string."""
     import yaml
+
     fm = yaml.dump(data, allow_unicode=True, sort_keys=False)
     return f"---\n{fm}---\n"
 
 
-# ---------------------------------------------------------------------------
-# Plugin reader
-# ---------------------------------------------------------------------------
+def rewrite_platform_paths(content: str, target: str) -> str:
+    replacements = {
+        "codex": {
+            "${CLAUDE_PLUGIN_ROOT}": "${CODEX_PLUGIN_ROOT}",
+            "~/.claude/skills/": "~/.codex/skills/",
+            ".claude/skills/": ".codex/skills/",
+        },
+        "copilot": {
+            "${CLAUDE_PLUGIN_ROOT}": "${COPILOT_PLUGIN_ROOT}",
+            "~/.claude/skills/": "~/.copilot/skills/",
+            ".claude/skills/": ".copilot/skills/",
+        },
+    }
+
+    updated = content
+    for src, dst in replacements[target].items():
+        updated = updated.replace(src, dst)
+    return updated
+
 
 class Plugin:
     def __init__(self, name: str):
@@ -111,129 +112,73 @@ class Plugin:
     def exists(self) -> bool:
         return self.skills_dir.exists() and self.skill_md.exists()
 
-    def read_skill(self) -> tuple[dict, str]:
-        """Read the skill.md frontmatter and body."""
-        text = read_file(self.skill_md)
-        return parse_frontmatter(text)
-
     def read_plugin_json(self) -> dict:
         return json.loads(read_file(self.claude_plugin_json))
+
+    def read_skill(self) -> tuple[dict, str]:
+        return parse_frontmatter(read_file(self.skill_md))
 
     def read_copilot_config(self) -> Optional[dict]:
         if self.copilot_yaml.exists():
             import yaml
+
             return yaml.safe_load(read_file(self.copilot_yaml)) or {}
         return None
 
 
-# ---------------------------------------------------------------------------
-# Codex sync
-# ---------------------------------------------------------------------------
-
-def sync_to_codex(plugin: Plugin) -> None:
-    """Sync plugin to codex/skills/<name>/."""
-    if not plugin.exists():
-        print(f"  [SKIP] {plugin.name}: no skill found")
-        return
-
-    target_dir = CODEX_DIR / plugin.name
-    copy_skill_tree(plugin.skills_dir, target_dir)
-
-    # Path replacements: .claude -> .codex
+def export_common_markdown(target_dir: Path, target: str) -> None:
     for md_file in target_dir.rglob("*.md"):
         content = read_file(md_file)
-        new_content = content.replace("${CLAUDE_PLUGIN_ROOT}", "${CODEX_PLUGIN_ROOT}")
-        new_content = new_content.replace("~/.claude/skills/", "~/.codex/skills/")
-        new_content = new_content.replace(".claude/skills/", ".codex/skills/")
-        if new_content != content:
-            write_file(md_file, new_content)
-
-    print(f"  [OK] codex/{plugin.name}/")
+        updated = rewrite_platform_paths(content, target)
+        if updated != content:
+            write_file(md_file, updated)
 
 
-# ---------------------------------------------------------------------------
-# Copilot sync
-# ---------------------------------------------------------------------------
-
-def sync_to_copilot(plugin: Plugin) -> None:
-    """Sync plugin to copilot/skills/<name>/."""
+def export_to_codex(plugin: Plugin, output_dir: Path) -> None:
     if not plugin.exists():
         print(f"  [SKIP] {plugin.name}: no skill found")
         return
 
-    target_dir = COPILOT_DIR / plugin.name
+    target_dir = output_dir / plugin.name
     copy_skill_tree(plugin.skills_dir, target_dir)
+    export_common_markdown(target_dir, "codex")
+    print(f"  [OK] {target_dir}")
 
-    # Rewrite skill.md with Copilot format (commands)
+
+def export_to_copilot(plugin: Plugin, output_dir: Path) -> None:
+    if not plugin.exists():
+        print(f"  [SKIP] {plugin.name}: no skill found")
+        return
+
+    target_dir = output_dir / plugin.name
+    copy_skill_tree(plugin.skills_dir, target_dir)
+    export_common_markdown(target_dir, "copilot")
+
     skill_md = target_dir / "skill.md"
     if skill_md.exists():
         meta, body = parse_frontmatter(read_file(skill_md))
         copilot_config = plugin.read_copilot_config()
 
-        # Build Copilot frontmatter
-        copilot_fm = {
+        copilot_frontmatter = {
             "name": plugin.name,
             "description": meta.get("description", ""),
         }
-
         if copilot_config and "commands" in copilot_config:
-            copilot_fm["commands"] = copilot_config["commands"]
+            copilot_frontmatter["commands"] = copilot_config["commands"]
 
-        # Write new skill.md
-        new_content = build_frontmatter(copilot_fm)
-        new_content += "\n" + body + "\n"
-
-        # Path replacements: .claude -> .copilot
-        new_content = new_content.replace("${CLAUDE_PLUGIN_ROOT}", "${COPILOT_PLUGIN_ROOT}")
-        new_content = new_content.replace("~/.claude/skills/", "~/.copilot/skills/")
-        new_content = new_content.replace(".claude/skills/", ".copilot/skills/")
-
+        new_content = build_frontmatter(copilot_frontmatter)
+        new_content += "\n" + rewrite_platform_paths(body, "copilot").strip() + "\n"
         write_file(skill_md, new_content)
 
-    print(f"  [OK] copilot/{plugin.name}/")
+    print(f"  [OK] {target_dir}")
 
-
-# ---------------------------------------------------------------------------
-# Claude (legacy) sync
-# ---------------------------------------------------------------------------
-
-def sync_to_claude(plugin: Plugin) -> None:
-    """Sync plugin to claude/skills/<name>/ (legacy format)."""
-    if not plugin.exists():
-        print(f"  [SKIP] {plugin.name}: no skill found")
-        return
-
-    target_dir = CLAUDE_DIR / plugin.name
-    copy_skill_tree(plugin.skills_dir, target_dir)
-
-    # Path replacements (self-referential, no change needed for .claude)
-    for md_file in target_dir.rglob("*.md"):
-        content = read_file(md_file)
-        new_content = content.replace("${CLAUDE_PLUGIN_ROOT}", "${CLAUDE_PLUGIN_ROOT}")
-        if new_content != content:
-            write_file(md_file, new_content)
-
-    print(f"  [OK] claude/{plugin.name}/")
-
-
-# ---------------------------------------------------------------------------
-# Copilot config template
-# ---------------------------------------------------------------------------
 
 def ensure_copilot_template(plugin: Plugin) -> bool:
-    """
-    Ensure .copilot.yaml exists for a plugin.
-    Returns True if a new template was created, False if already exists.
-    """
     if plugin.copilot_yaml.exists():
         return False
 
-    template = """# Copilot skill configuration
-# This file is the source of truth for Copilot commands generation.
-# Edit it manually, then run: python scripts/sync-skills.py --skill {name}
-#
-# Commands define the CLI subcommands exposed by this skill in Copilot.
-# Each command maps to a script in skills/{name}/scripts/
+    template = """# Copilot compatibility export configuration
+# This file is source input for: python scripts/sync-skills.py --target copilot --output-dir <path> --skill {name}
 #
 # commands:
 #   - name: <command-name>
@@ -248,16 +193,28 @@ def ensure_copilot_template(plugin: Plugin) -> bool:
     return True
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
-    parser = argparse.ArgumentParser(description="Sync Plugin Marketplace skills to Codex/Copilot/Claude")
-    parser.add_argument("--all", action="store_true", help="Sync all plugins")
-    parser.add_argument("--skill", type=str, help="Sync specific plugin by name")
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Export marketplace plugin skills to Codex or Copilot compatibility bundles"
+    )
+    parser.add_argument("--all", action="store_true", help="Export all plugins")
+    parser.add_argument("--skill", type=str, help="Export a specific plugin")
     parser.add_argument("--list", action="store_true", help="List available plugins")
-    parser.add_argument("--init-copilot", action="store_true", help="Create .copilot.yaml templates for all plugins")
+    parser.add_argument(
+        "--target",
+        choices=("codex", "copilot"),
+        help="Compatibility target format",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory where exported skills will be written",
+    )
+    parser.add_argument(
+        "--init-copilot",
+        action="store_true",
+        help="Create .copilot.yaml templates for plugins that do not have one",
+    )
     args = parser.parse_args()
 
     plugins = find_plugins()
@@ -265,20 +222,18 @@ def main():
     if args.list:
         print("Available plugins:")
         for name in plugins:
-            p = Plugin(name)
-            desc = p.read_plugin_json().get("description", "")
+            desc = Plugin(name).read_plugin_json().get("description", "")
             print(f"  - {name}: {desc}")
         return
 
     if args.init_copilot:
         print("Creating .copilot.yaml templates...")
         for name in plugins:
-            p = Plugin(name)
-            if ensure_copilot_template(p):
+            plugin = Plugin(name)
+            if ensure_copilot_template(plugin):
                 print(f"  [NEW] plugins/{name}/.copilot.yaml")
             else:
                 print(f"  [EXISTS] plugins/{name}/.copilot.yaml")
-        print("\nPlease edit the generated .copilot.yaml files and re-run with --all")
         return
 
     if args.skill:
@@ -287,17 +242,26 @@ def main():
             sys.exit(1)
         plugins = [args.skill]
     elif not args.all:
-        print("Usage: python scripts/sync-skills.py [--all | --skill <name> | --list | --init-copilot]")
+        print("Usage: python scripts/sync-skills.py --target <codex|copilot> --output-dir <path> [--all | --skill <name>]")
         sys.exit(1)
 
-    print(f"Syncing {len(plugins)} plugin(s)...\n")
+    if not args.target or not args.output_dir:
+        print("Error: --target and --output-dir are required for export.")
+        sys.exit(1)
 
+    output_dir = args.output_dir.expanduser().resolve()
+    if output_dir.exists() and not output_dir.is_dir():
+        print(f"Error: output path is not a directory: {output_dir}")
+        sys.exit(1)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    exporter = export_to_codex if args.target == "codex" else export_to_copilot
+
+    print(f"Exporting {len(plugins)} plugin(s) to {args.target} -> {output_dir}\n")
     for name in plugins:
-        p = Plugin(name)
+        plugin = Plugin(name)
         print(f"[{name}]")
-        sync_to_claude(p)
-        sync_to_codex(p)
-        sync_to_copilot(p)
+        exporter(plugin, output_dir)
         print()
 
     print("Done!")

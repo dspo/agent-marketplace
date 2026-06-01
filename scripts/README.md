@@ -1,61 +1,43 @@
-# Skills Sync Tool
+# Compatibility Export Tool
 
-同步 `plugins/`（Plugin Marketplace 源文件）到 `claude/`、`codex`、`copilot` 目录。
+`plugins/` 是仓库里的唯一源文件。这个目录下的脚本只负责把 plugin skills **按需导出** 为 Codex 或 Copilot 可复用的兼容产物；仓库本身不再维护 `codex/`、`copilot/` 目录。
 
-## 架构
+## 输入与输出
 
-```
-plugins/<name>/                 # 唯一源文件（Plugin Marketplace 格式）
+```text
+plugins/<name>/                 # 唯一源文件
   ├── .claude-plugin/plugin.json
-  ├── .copilot.yaml              # Copilot commands 配置（可选）
+  ├── .copilot.yaml             # 仅 Copilot 导出时使用，可选
   └── skills/<name>/
-      ├── SKILL.md               # 主文件（frontmatter + Markdown）
-      ├── scripts/               # 工具脚本
-      ├── references/            # 参考资料
-      └── examples/              # 示例
+      ├── SKILL.md
+      ├── scripts/
+      ├── references/
+      ├── examples/
+      └── templates/
 
-# 运行 scripts/sync-skills.py 后自动生成：
-claude/skills/<name>/           # Claude Code（传统方式）
-codex/skills/<name>/            # Codex（OpenAI）
-copilot/skills/<name>/          # Copilot（GitHub）
+# 运行 scripts/sync-skills.py 后，导出到你指定的目录：
+<output-dir>/<name>/
 ```
 
 ## 使用
 
 ```bash
-# 列出所有 plugins
-python scripts/sync-skills.py --list
+# 列出所有 plugin
+python3 scripts/sync-skills.py --list
 
-# 同步所有 plugins
-python scripts/sync-skills.py --all
+# 导出全部 plugins 到 Codex
+python3 scripts/sync-skills.py --target codex --output-dir ~/.codex/skills --all
 
-# 同步单个 plugin
-python scripts/sync-skills.py --skill <name>
+# 导出单个 plugin 到 Copilot
+python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill database-access
 
-# 为所有 plugin 生成 .copilot.yaml 模板
-python scripts/sync-skills.py --init-copilot
+# 为 plugins 生成 Copilot 配置模板
+python3 scripts/sync-skills.py --init-copilot
 ```
 
-## 添加新 Skill
+## 规则
 
-1. 在 `plugins/` 下创建新目录：
-   ```
-   plugins/my-skill/
-     ├── .claude-plugin/plugin.json
-     ├── .copilot.yaml              # 可选
-     └── skills/my-skill/
-         ├── SKILL.md
-         └── ...
-   ```
-
-2. 运行同步：
-   ```bash
-   python scripts/sync-skills.py --skill my-skill
-   ```
-
-## 注意事项
-
-- **唯一源文件**：`plugins/` 是唯一的源，不要手动修改 `claude/`、`codex`、`copilot` 目录中的内容
-- **自动替换路径**：脚本会自动替换不同平台的路径变量（如 `${CLAUDE_PLUGIN_ROOT}` → `${CODEX_PLUGIN_ROOT}`）
-- **文件名转换**：`SKILL.md` → `skill.md`（Codex/Copilot/Claude 使用小写文件名）
-- **Copilot commands**：在 `.copilot.yaml` 中定义 commands，脚本会自动合并到 Copilot 的 `skill.md`
+- `plugins/` 永远是唯一 source of truth。
+- `.copilot.yaml` 是 Copilot 导出用的源配置，不代表仓库继续维护 Copilot 目录。
+- 导出时会自动把 `SKILL.md` 转成 `skill.md`，并替换平台路径变量。
+- 不要把导出的 `codex/` 或 `copilot/` 目录重新提交回仓库。
