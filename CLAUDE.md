@@ -15,7 +15,6 @@ This file provides guidance to Claude Code when working in this repository.
 ├── plugins/                            # 唯一源文件
 ├── scripts/sync-skills.py              # Codex/Copilot 兼容导出
 ├── doc/skills-installation.md          # 兼容导出说明
-├── claude/                             # Claude 侧遗留安装辅助
 └── database-access-mcp/                # 独立 MCP Server
 ```
 

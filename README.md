@@ -64,7 +64,6 @@ claude mcp add --transport stdio database-access -- python -m database_access_mc
 │   └── playwright-cli/
 ├── scripts/sync-skills.py              # Codex/Copilot 兼容导出脚本
 ├── doc/skills-installation.md          # 兼容复用指南
-├── claude/                             # Claude 侧遗留安装辅助
 └── database-access-mcp/                # 独立 MCP Server
 ```
 
