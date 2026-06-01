@@ -1,6 +1,8 @@
 ---
 name: gitlab-dev
-description: Guide for GitLab development workflows involving issues, merge requests, pipelines, gitlab-flow, or worktrees. Use when tasks must be delivered through GitLab objects instead of stopping at local changes.
+description: Guide for GitLab development workflows involving issues, merge requests,
+  pipelines, gitlab-flow, or worktrees. Use when tasks must be delivered through GitLab
+  objects instead of stopping at local changes.
 ---
 
 # Gitlab dev

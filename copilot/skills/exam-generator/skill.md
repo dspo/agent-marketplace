@@ -1,4 +1,5 @@
 ---
+name: exam-generator
 description: 试卷生成器 — 基于知识库生成专业试卷，支持多种题型、LaTeX 排版和 PDF 导出
 ---
 
@@ -49,7 +50,7 @@ which xelatex || echo "NOT_FOUND"
 
 ### 3. 定义试题约束
 
-参考约束模板：`${CLAUDE_PLUGIN_ROOT}/skills/exam-generator/examples/exam-constraints.md`
+参考约束模板：`${COPILOT_PLUGIN_ROOT}/skills/exam-generator/examples/exam-constraints.md`
 
 约束文档应定义：基本信息（名称、总分、时间）、题型分布（题量、分值、难度比例）、知识点覆盖要求。
 
@@ -61,8 +62,8 @@ which xelatex || echo "NOT_FOUND"
 3. 确保难度分布合理
 4. 生成 LaTeX 格式的试卷
 
-LaTeX 模板参考：`${CLAUDE_PLUGIN_ROOT}/skills/exam-generator/templates/exam-template.tex`
-答题卡模板参考：`${CLAUDE_PLUGIN_ROOT}/skills/exam-generator/templates/answer-sheet-template.tex`
+LaTeX 模板参考：`${COPILOT_PLUGIN_ROOT}/skills/exam-generator/templates/exam-template.tex`
+答题卡模板参考：`${COPILOT_PLUGIN_ROOT}/skills/exam-generator/templates/answer-sheet-template.tex`
 
 ### 5. 编译 PDF
 
