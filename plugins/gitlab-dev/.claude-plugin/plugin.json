@@ -1,5 +1,0 @@
-{
-  "name": "gitlab-dev",
-  "description": "Guide for GitLab development workflows involving issues, merge requests, pipelines, gitlab-flow, or worktrees.",
-  "version": "1.0.0"
-}

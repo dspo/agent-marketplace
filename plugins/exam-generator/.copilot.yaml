@@ -1,7 +1,0 @@
-# Copilot compatibility configuration
-# This file is source input for on-demand Copilot export.
-# Run: python scripts/sync-skills.py --target copilot --output-dir <path> --skill exam-generator
-#
-# NOTE: exam-generator is a descriptive skill (no CLI commands).
-# Commands are not required for skills that only provide context and instructions.
-# Leave empty or comment out if no commands are needed.
