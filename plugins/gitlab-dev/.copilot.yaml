@@ -1,7 +1,0 @@
-# Copilot skill configuration
-# This file is the source of truth for Copilot commands generation.
-# Edit it manually, then run: python scripts/sync-skills.py --skill gitlab-dev
-#
-# NOTE: gitlab-dev is a descriptive skill (no CLI commands).
-# Commands are not required for skills that only provide context and instructions.
-# Leave empty or comment out if no commands are needed.

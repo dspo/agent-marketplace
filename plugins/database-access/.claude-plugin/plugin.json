@@ -1,5 +1,0 @@
-{
-  "name": "database-access",
-  "description": "数据库开发助手 — 安全连接 MySQL 数据库，查询表结构、获取示例数据、执行只读查询",
-  "version": "1.0.0"
-}
