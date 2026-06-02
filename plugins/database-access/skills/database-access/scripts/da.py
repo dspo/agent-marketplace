@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-huayi-dev 数据库工具脚本
+database-access 数据库工具脚本
 用于连接数据库、查询表结构、获取示例数据
 """
 

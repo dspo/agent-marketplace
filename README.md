@@ -10,7 +10,6 @@
 /plugin marketplace add /path/to/huayi-dev-agent-skills
 /plugin install database-access
 /plugin install gitlab-dev
-/plugin install go-spec-review
 /plugin install exam-generator
 /plugin install playwright-cli
 ```
@@ -49,9 +48,7 @@ python3 scripts/sync-skills.py --target copilot --output-dir "$PWD/.copilot/skil
 ├── plugins/                            # 唯一源文件
 │   ├── database-access/
 │   ├── gitlab-dev/
-│   ├── go-spec-review/
 │   ├── exam-generator/
-│   ├── huayi-dev/
 │   └── playwright-cli/
 ├── scripts/sync-skills.py              # Codex/Copilot 兼容导出脚本
 └── doc/skills-installation.md          # 兼容复用指南
