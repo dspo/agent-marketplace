@@ -29,14 +29,14 @@ This file provides guidance to Claude Code when working in this repository.
 
 ```bash
 /plugin marketplace add /path/to/huayi-dev-agent-skills
-/plugin install database-access
+/plugin install gitlab-dev
 ```
 
 ### Compatibility Export
 
 ```bash
 python3 scripts/sync-skills.py --target codex --output-dir ~/.codex/skills --all
-python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill database-access
+python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill gitlab-dev
 ```
 
 ## Maintenance Rules
@@ -49,7 +49,7 @@ python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills -
 ## Dependencies
 
 ```bash
-pip install pyyaml pymysql
+pip install pyyaml
 ```
 
 Python 3.10+ required.

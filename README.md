@@ -8,7 +8,6 @@
 
 ```bash
 /plugin marketplace add /path/to/huayi-dev-agent-skills
-/plugin install database-access
 /plugin install gitlab-dev
 /plugin install exam-generator
 /plugin install playwright-cli
@@ -29,7 +28,7 @@
 python3 scripts/sync-skills.py --target codex --output-dir ~/.codex/skills --all
 
 # 导出单个 plugin 到 Copilot
-python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill database-access
+python3 scripts/sync-skills.py --target copilot --output-dir ~/.copilot/skills --skill gitlab-dev
 ```
 
 也可以导出到项目本地目录：
@@ -46,7 +45,6 @@ python3 scripts/sync-skills.py --target copilot --output-dir "$PWD/.copilot/skil
 ```text
 ├── .claude-plugin/marketplace.json     # Claude Code marketplace 目录
 ├── plugins/                            # 唯一源文件
-│   ├── database-access/
 │   ├── gitlab-dev/
 │   ├── exam-generator/
 │   └── playwright-cli/
@@ -57,7 +55,7 @@ python3 scripts/sync-skills.py --target copilot --output-dir "$PWD/.copilot/skil
 ## 依赖
 
 ```bash
-pip install pyyaml pymysql
+pip install pyyaml
 ```
 
 Python 3.10+ required.

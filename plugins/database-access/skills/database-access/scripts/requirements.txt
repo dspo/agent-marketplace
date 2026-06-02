@@ -1,3 +1,0 @@
-# database-access skill 依赖
-pyyaml>=6.0
-pymysql>=1.0.0
