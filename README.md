@@ -2,7 +2,10 @@
 
 花易项目的统一 **Plugin Marketplace** 仓库，同时兼容 Claude Code、GitHub Copilot CLI 和 OpenAI Codex。
 
-`plugins/` 是唯一 source of truth。
+`plugins/` 是唯一 source of truth。每个插件目录同时保留：
+
+- 面向 Claude Code / Copilot CLI 的根级 `plugin.json` 与 `SKILL.md`
+- 面向 Codex 的 `.codex-plugin/plugin.json` 与 `skills/<skill>/SKILL.md`
 
 ## 使用方式
 
@@ -21,7 +24,8 @@ copilot plugin marketplace add /path/to/huayi-dev-agent-skills # Copilot CLI
 
 ### OpenAI Codex
 
-Codex 通过 `.agents/plugins/marketplace.json` 发现插件。
+Codex 通过 `.agents/plugins/marketplace.json` 发现插件，并从每个插件目录下的
+`.codex-plugin/plugin.json` 与 `skills/` 读取插件元数据和 skill。
 
 ## 项目结构
 
@@ -30,14 +34,20 @@ Codex 通过 `.agents/plugins/marketplace.json` 发现插件。
 ├── .agents/plugins/marketplace.json      # OpenAI Codex 索引
 ├── plugins/                              # 统一插件源码
 │   ├── gitlab-dev/
+│   │   ├── .codex-plugin/plugin.json
+│   │   ├── skills/gitlab-dev/SKILL.md
 │   │   ├── plugin.json
 │   │   └── SKILL.md
 │   ├── exam-generator/
+│   │   ├── .codex-plugin/plugin.json
+│   │   ├── skills/exam-generator/SKILL.md
 │   │   ├── plugin.json
 │   │   ├── SKILL.md
 │   │   ├── examples/
 │   │   └── templates/
 │   └── playwright-cli/
+│       ├── .codex-plugin/plugin.json
+│       ├── skills/playwright-cli/SKILL.md
 │       ├── plugin.json
 │       ├── SKILL.md
 │       └── references/
@@ -48,5 +58,7 @@ Codex 通过 `.agents/plugins/marketplace.json` 发现插件。
 ## 维护规则
 
 1. 新增或修改插件时，只改 `plugins/<name>/` 和两份 `marketplace.json`。
-2. 每个插件目录必须有 `plugin.json`（描述文件）和 `SKILL.md`（主文档）。
-3. 不维护任何平台专属导出目录。
+2. Claude Code / Copilot CLI 入口保持在根级 `plugin.json` 与 `SKILL.md`。
+3. Codex 入口保持在 `.codex-plugin/plugin.json` 与 `skills/<skill>/SKILL.md`。
+4. `.claude-plugin/marketplace.json` 与 `.agents/plugins/marketplace.json` 的 schema 不同，不要混用。
+5. 若同一插件同时维护根级 `SKILL.md` 与 Codex `skills/<skill>/SKILL.md`，两者内容变更需要同步；Codex 版的文档链接必须按其自身目录重新校准相对路径。

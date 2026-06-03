@@ -1,0 +1,34 @@
+{
+  "name": "playwright-cli",
+  "version": "1.0.0",
+  "description": "浏览器自动化助手，使用 playwright-cli 完成页面操作、测试、截图和数据提取。",
+  "author": {
+    "name": "Huayi",
+    "url": "https://git.huayi.tech/huayi"
+  },
+  "homepage": "https://git.huayi.tech/huayi/shared/agent-skills",
+  "repository": "https://git.huayi.tech/huayi/shared/agent-skills",
+  "keywords": [
+    "playwright",
+    "browser",
+    "automation",
+    "testing"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Playwright CLI",
+    "shortDescription": "Automate browser actions from Codex with playwright-cli",
+    "longDescription": "Use playwright-cli for deterministic browser automation, testing, screenshots, form filling, and structured page inspection.",
+    "developerName": "Huayi",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "用 playwright-cli 打开页面、执行操作，并输出关键截图或提取结果。"
+    ],
+    "brandColor": "#2EAD33",
+    "screenshots": []
+  }
+}
