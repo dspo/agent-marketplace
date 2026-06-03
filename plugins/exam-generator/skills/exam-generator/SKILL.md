@@ -50,7 +50,9 @@ which xelatex || echo "NOT_FOUND"
 
 ### 3. 定义试题约束
 
-参考约束模板：`${CLAUDE_PLUGIN_ROOT}/skills/exam-generator/examples/exam-constraints.md`
+以下相对链接均以当前 `SKILL.md` 所在目录为基准解析。
+
+参考约束模板：[../../examples/exam-constraints.md](../../examples/exam-constraints.md)
 
 约束文档应定义：基本信息（名称、总分、时间）、题型分布（题量、分值、难度比例）、知识点覆盖要求。
 
@@ -62,8 +64,8 @@ which xelatex || echo "NOT_FOUND"
 3. 确保难度分布合理
 4. 生成 LaTeX 格式的试卷
 
-LaTeX 模板参考：`${CLAUDE_PLUGIN_ROOT}/skills/exam-generator/templates/exam-template.tex`
-答题卡模板参考：`${CLAUDE_PLUGIN_ROOT}/skills/exam-generator/templates/answer-sheet-template.tex`
+LaTeX 模板参考：[../../templates/exam-template.tex](../../templates/exam-template.tex)
+答题卡模板参考：[../../templates/answer-sheet-template.tex](../../templates/answer-sheet-template.tex)
 
 ### 5. 编译 PDF
 

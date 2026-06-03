@@ -1,25 +1,44 @@
 {
   "name": "huayi-dev-plugins",
-  "description": "花易项目 Plugin Marketplace — GitLab 助手、试卷生成、浏览器自动化",
-  "owner": {
-    "name": "huayi",
-    "url": "https://git.huayi.tech/huayi"
+  "interface": {
+    "displayName": "Huayi Dev Plugins"
   },
   "plugins": [
     {
       "name": "gitlab-dev",
-      "description": "GitLab 开发助手 — 结合 GitLab MCP 和 glab CLI 管理项目、MR、Issue 和 CI/CD",
-      "source": "./plugins/gitlab-dev"
+      "source": {
+        "source": "local",
+        "path": "./plugins/gitlab-dev"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
     },
     {
       "name": "exam-generator",
-      "description": "试卷生成器 — 基于知识库生成专业试卷，支持多种题型、LaTeX 排版和 PDF 导出",
-      "source": "./plugins/exam-generator"
+      "source": {
+        "source": "local",
+        "path": "./plugins/exam-generator"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
     },
     {
       "name": "playwright-cli",
-      "description": "浏览器自动化 — 使用 playwright-cli 进行网页测试、表单填写、截图和数据提取",
-      "source": "./plugins/playwright-cli"
+      "source": {
+        "source": "local",
+        "path": "./plugins/playwright-cli"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
     }
   ]
 }
