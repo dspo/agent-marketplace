@@ -71,6 +71,11 @@ if task_is_review:
 2. GitLab 对象操作：`glab`
 3. 只有前两者不支持时，才回退到其他方式
 
+## Worktree
+
+新 worktree 放到 root worktree 平级，而不是放到 root worktree 下的子目录中。
+新 worktree 命名规则 `${root_worktree_name}--$(basename "$branch_name")`.
+
 ## 交付要求
 
 - GitLab 工作流任务的最终交付物应是 **MR 链接** 或 **已更新的 MR 链接**。
