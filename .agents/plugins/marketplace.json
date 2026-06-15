@@ -6,6 +6,7 @@
   "plugins": [
     {
       "name": "gitlab-dev",
+      "description": "GitLab 开发助手 — mr、review、resolve、conflict 四个专项 skill，结合 glab CLI 管理项目交付",
       "source": {
         "source": "local",
         "path": "./plugins/gitlab-dev"

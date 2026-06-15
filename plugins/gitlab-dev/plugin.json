@@ -1,5 +1,5 @@
 {
   "name": "gitlab-dev",
-  "description": "GitLab 开发助手 — 结合 GitLab MCP 和 glab CLI 管理项目、MR、Issue 和 CI/CD",
-  "version": "1.0.0"
+  "description": "GitLab 开发助手 — mr、review、resolve、conflict 四个专项 skill，结合 glab CLI 管理项目交付",
+  "version": "2.0.0"
 }
