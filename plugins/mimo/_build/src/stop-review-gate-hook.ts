@@ -13,7 +13,7 @@ import { sortJobsNewestFirst } from "./lib/job-control.ts";
 import { SESSION_ID_ENV } from "./lib/tracked-jobs.ts";
 import { resolveWorkspaceRoot } from "./lib/workspace.ts";
 
-const STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
+const STOP_REVIEW_TIMEOUT_MS = 3 * 60 * 1000;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(SCRIPT_DIR, "..");
 

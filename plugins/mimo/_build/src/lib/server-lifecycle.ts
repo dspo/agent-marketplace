@@ -12,7 +12,7 @@ const SERVER_LOG_FILE = "server.log";
 const PORT_PATTERN = /listening on https?:\/\/[^:\s]+:(\d+)/g;
 const DEFAULT_STARTUP_TIMEOUT_MS = 10_000;
 const HEALTH_CHECK_TIMEOUT_MS = 2_000;
-const LOCK_STALE_MS = 30_000;
+const LOCK_STALE_MS = 60_000;
 
 export const MIMO_BIN_ENV = "MIMO_COMPANION_BIN";
 

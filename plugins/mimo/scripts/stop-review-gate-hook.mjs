@@ -179,7 +179,7 @@ function sortJobsNewestFirst(jobs) {
 }
 
 // src/stop-review-gate-hook.ts
-var STOP_REVIEW_TIMEOUT_MS = 15 * 60 * 1e3;
+var STOP_REVIEW_TIMEOUT_MS = 3 * 60 * 1e3;
 var SCRIPT_DIR = path3.dirname(fileURLToPath(import.meta.url));
 var ROOT_DIR = path3.resolve(SCRIPT_DIR, "..");
 function readHookInput() {

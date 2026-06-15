@@ -129,6 +129,12 @@ function removeFileIfExists(filePath: string | null | undefined): void {
   }
 }
 
+function atomicWriteJSON(filePath: string, data: string): void {
+  const tmpFile = path.join(path.dirname(filePath), `.tmp-${process.pid}-${Date.now()}`);
+  fs.writeFileSync(tmpFile, data, "utf8");
+  fs.renameSync(tmpFile, filePath);
+}
+
 export function saveState(cwd: string, state: Partial<CompanionState>): CompanionState {
   const previousJobs = loadState(cwd).jobs;
   ensureStateDir(cwd);
@@ -151,7 +157,7 @@ export function saveState(cwd: string, state: Partial<CompanionState>): Companio
     removeFileIfExists(job.logFile);
   }
 
-  fs.writeFileSync(resolveStateFile(cwd), `${JSON.stringify(nextState, null, 2)}\n`, "utf8");
+  atomicWriteJSON(resolveStateFile(cwd), `${JSON.stringify(nextState, null, 2)}\n`);
   return nextState;
 }
 
@@ -206,7 +212,7 @@ export function getConfig(cwd: string): CompanionConfig {
 export function writeJobFile(cwd: string, jobId: string, payload: JobRecord): string {
   ensureStateDir(cwd);
   const jobFile = resolveJobFile(cwd, jobId);
-  fs.writeFileSync(jobFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  atomicWriteJSON(jobFile, `${JSON.stringify(payload, null, 2)}\n`);
   return jobFile;
 }
 

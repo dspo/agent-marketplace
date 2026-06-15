@@ -219,6 +219,11 @@ function removeFileIfExists(filePath) {
     fs.unlinkSync(filePath);
   }
 }
+function atomicWriteJSON(filePath, data) {
+  const tmpFile = path.join(path.dirname(filePath), `.tmp-${process.pid}-${Date.now()}`);
+  fs.writeFileSync(tmpFile, data, "utf8");
+  fs.renameSync(tmpFile, filePath);
+}
 function saveState(cwd, state) {
   const previousJobs = loadState(cwd).jobs;
   ensureStateDir(cwd);
@@ -239,8 +244,8 @@ function saveState(cwd, state) {
     removeJobFile(resolveJobFile(cwd, job.id));
     removeFileIfExists(job.logFile);
   }
-  fs.writeFileSync(resolveStateFile(cwd), `${JSON.stringify(nextState, null, 2)}
-`, "utf8");
+  atomicWriteJSON(resolveStateFile(cwd), `${JSON.stringify(nextState, null, 2)}
+`);
   return nextState;
 }
 function removeJobFile(jobFile) {

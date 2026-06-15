@@ -674,6 +674,11 @@ function removeFileIfExists(filePath) {
     fs3.unlinkSync(filePath);
   }
 }
+function atomicWriteJSON(filePath, data) {
+  const tmpFile = path2.join(path2.dirname(filePath), `.tmp-${process.pid}-${Date.now()}`);
+  fs3.writeFileSync(tmpFile, data, "utf8");
+  fs3.renameSync(tmpFile, filePath);
+}
 function saveState(cwd, state) {
   const previousJobs = loadState(cwd).jobs;
   ensureStateDir(cwd);
@@ -694,8 +699,8 @@ function saveState(cwd, state) {
     removeJobFile(resolveJobFile(cwd, job.id));
     removeFileIfExists(job.logFile);
   }
-  fs3.writeFileSync(resolveStateFile(cwd), `${JSON.stringify(nextState, null, 2)}
-`, "utf8");
+  atomicWriteJSON(resolveStateFile(cwd), `${JSON.stringify(nextState, null, 2)}
+`);
   return nextState;
 }
 function updateState(cwd, mutate) {
@@ -743,8 +748,8 @@ function getConfig(cwd) {
 function writeJobFile(cwd, jobId, payload) {
   ensureStateDir(cwd);
   const jobFile = resolveJobFile(cwd, jobId);
-  fs3.writeFileSync(jobFile, `${JSON.stringify(payload, null, 2)}
-`, "utf8");
+  atomicWriteJSON(jobFile, `${JSON.stringify(payload, null, 2)}
+`);
   return jobFile;
 }
 function readJobFile(jobFile) {
@@ -771,7 +776,7 @@ var SERVER_LOG_FILE = "server.log";
 var PORT_PATTERN = /listening on https?:\/\/[^:\s]+:(\d+)/g;
 var DEFAULT_STARTUP_TIMEOUT_MS = 1e4;
 var HEALTH_CHECK_TIMEOUT_MS = 2e3;
-var LOCK_STALE_MS = 3e4;
+var LOCK_STALE_MS = 6e4;
 var MIMO_BIN_ENV = "MIMO_COMPANION_BIN";
 function resolveMimoBin(env = process3.env) {
   return env[MIMO_BIN_ENV] || "mimo";

@@ -40,9 +40,13 @@ description: MiMo 编程助手 — 使用 MiMo 进行代码审查、委托任务
 | `MIMOCODE_SERVER_PASSWORD` | 如设置，客户端发送匹配的 Basic Auth 到启动的服务器 |
 | `MIMO_COMPANION_SESSION_ID` | 由 SessionStart hook 自动设置 |
 
+> ⚠️ 后台任务（`--background`）启动的 detached worker 使用父进程启动时的环境变量。如果中途修改了 API key 等环境变量，worker 不会感知变更——需重启 Claude Code 会话。
+
 ## 构建
 
-如需修改插件脚本，在 `_build/` 目录中构建：
+`_build/` 目录存放 TypeScript 源码、构建配置和测试文件。下划线前缀表示这是开发者工具区，不属于插件运行时分发内容——用户安装插件后只需 `scripts/*.mjs`、`commands/`、`prompts/` 等文件，`_build/` 仅在修改源码时使用。
+
+如需修改插件脚本：
 
 ```bash
 cd plugins/mimo/_build
@@ -52,3 +56,5 @@ npm test          # node --test against a fake in-process MiMo HTTP server
 ```
 
 编译产物 `scripts/*.mjs` 已提交到仓库，插件以原样从本仓库分发。
+
+> ⚠️ 当前有 7 个集成测试因 Node.js 版本和 macOS 网络环境的兼容性问题持续失败（server 端口检测超时），这是源仓库的预存问题。纯库测试（state、render、mimo-client、server-lifecycle）均正常通过。
