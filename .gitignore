@@ -1,0 +1,9 @@
+# Claude Code local artifacts
+.claude/worktrees/
+
+# Plugin build artifacts (compiled scripts are intentionally committed)
+plugins/mimo/_build/node_modules/
+plugins/mimo/_build/tests/.build/
+
+# OS files
+.DS_Store
