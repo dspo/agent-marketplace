@@ -1,6 +1,6 @@
 {
   "name": "huayi-dev-plugins",
-  "description": "花易项目统一 Plugin Marketplace — GitLab 助手、试卷生成、浏览器自动化",
+  "description": "花易项目统一 Plugin Marketplace — GitLab 助手、试卷生成、浏览器自动化、MiMo 编程助手",
   "owner": {
     "name": "huayi",
     "url": "https://git.huayi.tech/huayi"
@@ -20,6 +20,11 @@
       "name": "playwright-cli",
       "description": "浏览器自动化 — 使用 playwright-cli 进行网页测试、表单填写、截图和数据提取",
       "source": "./plugins/playwright-cli"
+    },
+    {
+      "name": "mimo",
+      "description": "MiMo 编程助手 — 使用 MiMo 进行代码审查、委托任务和 stop-gate 审查",
+      "source": "./plugins/mimo"
     }
   ]
 }
