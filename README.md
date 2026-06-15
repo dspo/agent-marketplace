@@ -9,8 +9,9 @@
 ### Claude Code
 
 ```bash
-# 注册 marketplace（使用 Git 仓库地址，无需 clone）
-/plugin marketplace add git@git.huayi.tech:2222/huayi/shared/agent-marketplace.git
+# 注册 marketplace（使用 HTTPS + 凭据，无需 clone）
+# 将 <user>:<token> 替换为你的 GitLab 用户名和 access token
+/plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
 
 # 安装插件
 /plugin install gitlab-dev
@@ -19,13 +20,16 @@
 /plugin install playwright-cli
 ```
 
+> ⚠️ SSH 格式（`git@git.huayi.tech:2222/...`）在 Claude Code 中不可用，
+> 因为其内部 git clone 环境无法验证自定义 SSH 主机密钥。请使用 HTTPS 格式。
+
 注册后 Claude Code 会自动拉取仓库缓存，后续 `/plugin install` 即可按名称安装。
 
 ### GitHub Copilot CLI
 
 ```bash
 # 注册 marketplace（Copilot CLI 共享 .claude-plugin/ 索引）
-copilot plugin marketplace add git@git.huayi.tech:2222/huayi/shared/agent-marketplace.git
+copilot plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
 
 # 安装插件
 copilot plugin install gitlab-dev
