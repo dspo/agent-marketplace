@@ -25,7 +25,7 @@ This file provides guidance to Claude Code when working in this repository.
 ## Installation
 
 ```bash
-/plugin marketplace add ssh://git@git.huayi.tech:2222/huayi/shared/agent-marketplace.git
+/plugin marketplace add git@git.huayi.tech:2222/huayi/shared/agent-marketplace.git
 /plugin install gitlab-dev
 ```
 
