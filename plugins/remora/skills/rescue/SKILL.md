@@ -22,9 +22,9 @@ remora 是一个**自包含单文件 CLI**（`scripts/remora.mjs`，pi 库已打
 
 ## 使用流程
 
-### 1. 打包上下文为 task-file
+### 1. 把上下文组织成 task JSON
 
-把卡住的问题写成一个 JSON 文件，落到 `.remora/tasks/<描述>.json`。字段：
+把卡住的问题表示成一个 JSON 对象（**不落盘**，下一步直接从 stdin 喂给 CLI）。字段：
 
 ```jsonc
 {
@@ -36,21 +36,21 @@ remora 是一个**自包含单文件 CLI**（`scripts/remora.mjs`，pi 库已打
 }
 ```
 
-只有 `prompt` 是必填的；其余字段会被拼进 remora 的 system prompt，给得越具体，诊断越准。用 `Write` 工具写这个文件。
+只有 `prompt` 是必填的；其余字段会被拼进 remora 的 system prompt，给得越具体，诊断越准。**不要用 `Write` 落一个 task 文件** —— remora 自己会把这次任务持久化进 `.remora/sessions/`，编排层无须代劳。
 
-### 2. 调起 CLI
+### 2. 调起 CLI（task JSON 走 stdin）
+
+task JSON 通过 **stdin** 传入（用 heredoc），不经过 shell argv，天然免转义、不落盘：
 
 **前台（短任务，推荐默认）** —— 直接读结果：
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" rescue --task-file .remora/tasks/<name>.json
+node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" rescue <<'EOF'
+{ "prompt": "……", "files": ["……"], "expected": "……" }
+EOF
 ```
 
-**后台（长任务）** —— 用 `run_in_background` 跑同一命令，再用 `BashOutput` 轮询进度、`KillShell` 取消：
-
-```bash
-node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" rescue --task-file .remora/tasks/<name>.json
-```
+**后台（长任务）** —— 用 `run_in_background` 跑同一命令，再用 `BashOutput` 轮询进度、`KillShell` 取消。
 
 可选 flag：
 

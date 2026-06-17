@@ -1,10 +1,10 @@
 ---
 description: 把卡住的问题委托给 remora rescue agent（自包含、非 Claude 第二意见）
 argument-hint: "[--background] [--resume] [--session <id>] [--model <name>] [要 remora 调查或解决的问题]"
-allowed-tools: Bash(node:*), Write, BashOutput, KillShell
+allowed-tools: Bash(node:*), BashOutput, KillShell
 ---
 
-调用 `remora:rescue` skill 处理用户的请求。按 skill 的流程：打包上下文为 task-file → 调 `scripts/remora.mjs` → 读 stdout 结果 → 把 `finalMessage` 原样转达给用户。
+调用 `remora:rescue` skill 处理用户的请求。按 skill 的流程：把上下文组织成 task JSON → 用 heredoc 经 stdin 喂给 `scripts/remora.mjs` → 读 stdout 结果 → 把 `finalMessage` 原样转达给用户。
 
 用户请求：
 
@@ -12,7 +12,7 @@ $ARGUMENTS
 
 执行约定：
 
-- 把用户的自然语言请求提炼成 task-file 的 `prompt`，连同已知的 `problem`/`files`/`attempted`/`expected` 一起写入 `.remora/tasks/<描述>.json`（用 `Write`）。
+- 把用户的自然语言请求提炼成 task JSON 的 `prompt`，连同已知的 `problem`/`files`/`attempted`/`expected` 字段，用 heredoc 经 **stdin** 传给 CLI。**不要 `Write` 任何 task 文件** —— task 不落盘，留痕由 remora 的 session 负责。
 - 默认前台运行。请求里出现 `--background` 时用 `run_in_background` 跑，再用 `BashOutput` 轮询 stderr 进度、`KillShell` 取消。
 - `--resume` / `--session` / `--model` 原样转发给 `remora.mjs`，不要当作自然语言任务文本。
 - `--background` 是 Claude Code 的执行标志，不要转发给 `remora.mjs`。
