@@ -42,7 +42,7 @@ remora 收缩成两块：
 ```text
 Claude Code（主 agent）
   └─ skill: rescue（SKILL.md 指导）
-       └─ Bash（可 run_in_background）: node remora.mjs rescue --task-file ctx.json
+       └─ Bash（可 run_in_background）: node remora.mjs rescue  <<<task.json（stdin）
             └─ remora.mjs  ← 短命进程，跑完即退
                  └─ pi Agent（@earendil-works/pi-agent-core，进程内）
                       ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
@@ -89,7 +89,7 @@ plugins/remora/
     ├── tsconfig.json
     ├── build.mjs       # esbuild：src/cli.ts → ../scripts/remora.mjs（bundle + minify）
     └── src/
-        ├── cli.ts         # ★ CLI 入口：解析参数、读 task-file、调 runtime、输出流
+        ├── cli.ts         # ★ CLI 入口：解析参数、从 stdin 读 task JSON、调 runtime、输出流
         ├── runtime.ts     # ★ 薄封装 pi Agent：装配 + 事件→stderr 桥接 + 结果整形
         ├── tools.ts       # ★ AgentTool[]：read/grep/find/ls（阶段一只读；阶段二加 write/edit/bash）
         ├── permissions.ts # ★ beforeToolCall 权限门（READ_ONLY / WRITE）
@@ -105,9 +105,9 @@ plugins/remora/
 
 remora 的"编排层"不是代码，而是 `skills/rescue/SKILL.md` 里给主 agent 的指令。它替代了 mimo 的 subagent 转发 + job 命令面。SKILL 教 Claude：
 
-1. **打包上下文**：把当前卡住的问题、相关文件路径、已尝试的方案、期望产出，写成一个 `task-file`（JSON），落到 `.remora/tasks/<ts>.json`。借鉴 mimo rescue prompt 的结构化打包思路。
+1. **组织上下文**：把当前卡住的问题、相关文件路径、已尝试的方案、期望产出，表示成一个 task JSON（**不落盘**），用 heredoc 经 stdin 喂给 CLI。借鉴 mimo rescue prompt 的结构化打包思路。task 的持久化由 remora 自己的 session（见 5.5）负责，编排层无须落文件。
 2. **调起 CLI**：
-   - 前台（短任务）：`node <plugin>/scripts/remora.mjs rescue --task-file <path>`，直接读 stdout 结果。
+   - 前台（短任务）：`node <plugin>/scripts/remora.mjs rescue <<<task.json`（stdin），直接读 stdout 结果。
    - 后台（长任务）：用 `run_in_background` 跑同一命令，再用 `BashOutput` 轮询 stderr 进度、`Monitor` 流式盯关键事件、`KillShell` 取消。
 3. **读结果**：stdout 是结构化结果（诊断/建议/触达文件 diff）；stderr 是 NDJSON 进度流。SKILL 指导 Claude 如何把结果回报给用户。
 4. **错误处理**：CLI 非零退出 + stderr 末行的 error 对象，SKILL 指导 Claude 透传原始错误并补一句 actionable next step（"运行 /remora:setup 检查 provider 配置"）。
@@ -119,10 +119,10 @@ remora 的"编排层"不是代码，而是 `skills/rescue/SKILL.md` 里给主 ag
 ### 5.1 `cli.ts` —— 入口与 IO 约定
 
 ```ts
-// node remora.mjs rescue --task-file ctx.json [--write] [--resume <id>] [--model <name>]
+// node remora.mjs rescue [--write] [--resume] [--session <id>] [--model <name>]   ← task JSON 从 stdin 读
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const task = JSON.parse(await readFile(args.taskFile, "utf8"));
+  const task = JSON.parse(await readStdin());   // task JSON 从 stdin 读入,不落盘
   const result = await runTurn(process.cwd(), {
     prompt: task.prompt,
     system: buildSystemPrompt(task),

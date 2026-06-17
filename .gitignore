@@ -6,5 +6,8 @@ plugins/mimo/_build/node_modules/
 plugins/mimo/_build/tests/.build/
 plugins/remora/_build/node_modules/
 
+# remora runtime state (config + per-session history), user-local
+.remora/
+
 # OS files
 .DS_Store

@@ -1,10 +1,8 @@
-import { readFileSync } from "node:fs";
-
 import { loadConfig } from "./config.ts";
 import { runTurn } from "./runtime.ts";
 
 /** The structured rescue task, authored by the calling agent (see SKILL.md). */
-interface TaskFile {
+interface RescueTask {
 	prompt: string;
 	problem?: string;
 	files?: string[];
@@ -14,7 +12,6 @@ interface TaskFile {
 
 interface CliArgs {
 	command: string;
-	taskFile?: string;
 	write: boolean;
 	resume: boolean;
 	model?: string;
@@ -27,15 +24,29 @@ function parseArgs(argv: string[]): CliArgs {
 		const a = argv[i];
 		if (a === "--write") args.write = true;
 		else if (a === "--resume") args.resume = true;
-		else if (a === "--task-file") args.taskFile = argv[++i];
 		else if (a === "--model") args.model = argv[++i];
 		else if (a === "--session") args.sessionId = argv[++i] ?? "default";
 	}
 	return args;
 }
 
+/**
+ * Read the whole of stdin as UTF-8. The rescue task JSON is piped in this way.
+ * Fails fast on a TTY: with no pipe, stdin never reaches EOF and the process
+ * would hang forever waiting for input.
+ */
+async function readStdin(): Promise<string> {
+	if (process.stdin.isTTY) {
+		emit(process.stderr, { type: "error", message: "stdin is a TTY — pipe a JSON task object, e.g. `rescue <<'EOF' … EOF`" });
+		process.exit(2);
+	}
+	const chunks: Buffer[] = [];
+	for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+	return Buffer.concat(chunks).toString("utf8");
+}
+
 /** Compose the system prompt from the structured task fields. */
-function buildSystemPrompt(task: TaskFile): string {
+function buildSystemPrompt(task: RescueTask): string {
 	const lines = [
 		"You are remora, a focused rescue agent invoked to make progress on a problem the primary agent is stuck on.",
 		"You operate in a read-only investigation mode unless told otherwise: read code, search, and reason.",
@@ -127,21 +138,22 @@ async function main(): Promise<void> {
 		emit(process.stderr, { type: "error", message: `unknown command: ${args.command || "(none)"}` });
 		process.exit(2);
 	}
-	if (!args.taskFile) {
-		emit(process.stderr, { type: "error", message: "missing --task-file" });
+
+	const raw = await readStdin();
+	if (!raw.trim()) {
+		emit(process.stderr, { type: "error", message: "no task on stdin: pipe a JSON task object to `rescue`" });
 		process.exit(2);
 	}
 
-	let task: TaskFile;
+	let task: RescueTask;
 	try {
-		task = JSON.parse(readFileSync(args.taskFile, "utf8")) as TaskFile;
+		task = JSON.parse(raw) as RescueTask;
 	} catch (err) {
-		emit(process.stderr, { type: "error", message: `cannot read task-file: ${(err as Error).message}` });
+		emit(process.stderr, { type: "error", message: `task on stdin is not valid JSON: ${(err as Error).message}` });
 		process.exit(2);
-		return;
 	}
-	if (!task.prompt) {
-		emit(process.stderr, { type: "error", message: "task-file is missing the required 'prompt' field" });
+	if (typeof task.prompt !== "string" || !task.prompt.trim()) {
+		emit(process.stderr, { type: "error", message: "task is missing a non-empty string 'prompt' field" });
 		process.exit(2);
 	}
 
