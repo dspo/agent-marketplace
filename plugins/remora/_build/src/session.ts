@@ -1,53 +1,169 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import {
+	type AgentMessage,
+	type JsonlSessionMetadata,
+	JsonlSessionRepo,
+	type Session,
+} from "@earendil-works/pi-agent-core";
+import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
 
-const MAX_SERIALIZED_BYTES = 2 * 1024 * 1024; // 2 MiB
+const MAX_PERSIST_CHARS = 500_000;
+const TRUNCATION_NOTICE = "\n\n[remora: session content truncated]";
 
-function sessionsDir(cwd: string): string {
-	return join(cwd, ".remora", "sessions");
+/** How a turn wants to open its session: fresh, most-recent-for-cwd, or a specific id. */
+export type ResumeMode = "new" | "continue" | "id";
+
+/**
+ * Sessions root: centralized under the global `~/.remora` dir (consistent with
+ * remora's own `~/.remora/config.json`), overridable via `REMORA_SESSIONS_DIR`.
+ * The per-cwd subdir below this is named by pi's `JsonlSessionRepo.encodeCwd`
+ * (`--<cwd with /\:→->--`).
+ */
+export function sessionsRoot(): string {
+	return process.env.REMORA_SESSIONS_DIR ?? join(homedir(), ".remora", "projects");
 }
 
-function sessionPath(cwd: string, id: string): string {
-	return join(sessionsDir(cwd), `${id}.json`);
+function newRepo(cwd: string): JsonlSessionRepo {
+	return new JsonlSessionRepo({ fs: new NodeExecutionEnv({ cwd }), sessionsRoot: sessionsRoot() });
 }
 
-/** Load a persisted message history. Returns [] when the session is absent. */
-export function loadSession(cwd: string, id: string): AgentMessage[] {
-	try {
-		return JSON.parse(readFileSync(sessionPath(cwd, id), "utf8")) as AgentMessage[];
-	} catch {
-		return [];
-	}
+export interface OpenedSession {
+	session: Session<JsonlSessionMetadata>;
+	metadata: JsonlSessionMetadata;
+	isNew: boolean;
 }
 
 /**
- * Persist message history, capped at 2 MiB serialized. When over the cap, drop
- * the oldest messages until it fits (the system prompt lives on the Agent, not
- * in this array, so it is never at risk). Returns the number dropped.
+ * Open or create a session for `cwd` according to `mode`:
+ *   - `new`      → create a fresh session with a UUIDv4 id
+ *   - `continue` → reopen the most-recent session for this cwd (create if none)
+ *   - `id`       → reopen the specific session whose id == resumeId
  *
- * This is a coarse size guard; semantic compaction happens in-turn via the
- * Agent's `transformContext` hook (see compaction.ts).
+ * `repo.list` returns sessions newest-first by createdAt, so `--continue` is `[0]`.
  */
-export function saveSession(cwd: string, id: string, messages: AgentMessage[]): number {
-	mkdirSync(sessionsDir(cwd), { recursive: true });
+export async function openOrCreateSession(
+	cwd: string,
+	mode: ResumeMode,
+	resumeId?: string,
+): Promise<OpenedSession> {
+	const repo = newRepo(cwd);
 
-	// Common case: serialize once and write. Only when over the cap do we drop
-	// oldest messages, re-serializing the (now smaller) tail per drop.
-	let serialized = JSON.stringify(messages);
-	let kept = messages;
-	let dropped = 0;
-	if (Buffer.byteLength(serialized, "utf8") > MAX_SERIALIZED_BYTES) {
-		kept = messages.slice();
-		while (kept.length > 1) {
-			kept.shift();
-			dropped++;
-			serialized = JSON.stringify(kept);
-			if (Buffer.byteLength(serialized, "utf8") <= MAX_SERIALIZED_BYTES) break;
-		}
+	if (mode === "id") {
+		if (!resumeId) throw new Error("--resume requires a session id");
+		const list = await repo.list({ cwd });
+		const meta = list.find((m) => m.id === resumeId);
+		if (!meta) throw new Error(`session not found in ${cwd}: ${resumeId}`);
+		return { session: await repo.open(meta), metadata: meta, isNew: false };
 	}
 
-	writeFileSync(sessionPath(cwd, id), serialized, "utf8");
-	return dropped;
+	if (mode === "continue") {
+		const list = await repo.list({ cwd });
+		if (list.length > 0) return { session: await repo.open(list[0]), metadata: list[0], isNew: false };
+	}
+
+	const session = await repo.create({ cwd, id: randomUUID() });
+	return { session, metadata: await session.getMetadata(), isNew: true };
+}
+
+/** Reconstruct the message history from the session's typed entries (for resume). */
+export async function loadMessages(session: Session<JsonlSessionMetadata>): Promise<AgentMessage[]> {
+	return (await session.buildContext()).messages;
+}
+
+/**
+ * Append `message` as a `message` entry. Returns the entry id (used to back-fill
+ * a compaction entry's `firstKeptEntryId` when a message is later kept).
+ */
+export async function appendMessageEntry(
+	session: Session<JsonlSessionMetadata>,
+	message: AgentMessage,
+): Promise<string> {
+	return session.appendMessage(prepareForPersistence(message) as AgentMessage);
+}
+
+export interface CompactionRecord {
+	summary: string;
+	firstKeptEntryId: string;
+	tokensBefore: number;
+}
+
+/** Persist a `compaction` entry marking where history was summarized. `fromHook=true`. */
+export function appendCompactionEntry(
+	session: Session<JsonlSessionMetadata>,
+	record: CompactionRecord,
+): Promise<string> {
+	return session.appendCompaction(record.summary, record.firstKeptEntryId, record.tokensBefore, undefined, true);
+}
+
+/** Record the resolved model at session start (fidelity — tracks provider/model changes). */
+export function appendModelChangeEntry(
+	session: Session<JsonlSessionMetadata>,
+	provider: string,
+	modelId: string,
+): Promise<string> {
+	return session.appendModelChange(provider, modelId);
+}
+
+/** Auto-title derived from the first prompt, stored as a `session_info` entry. */
+export function appendTitleEntry(session: Session<JsonlSessionMetadata>, firstPrompt: string): Promise<string> | undefined {
+	const title = deriveTitle(firstPrompt);
+	return title ? session.appendSessionName(title) : undefined;
+}
+
+/**
+ * Record the parent Claude Code session id this rescue was spawned from, as a
+ * `custom` entry (pi's escape hatch for extension-private data). Claude Code
+ * injects `CLAUDE_CODE_SESSION_ID` (UUIDv4) into the subprocess env; when remora
+ * runs outside Claude Code the env is absent and nothing is recorded.
+ */
+export function appendLineageEntry(session: Session<JsonlSessionMetadata>): Promise<string> | undefined {
+	const claudeCodeSessionId = process.env.CLAUDE_CODE_SESSION_ID;
+	return claudeCodeSessionId
+		? session.appendCustomEntry("remora:lineage", { claudeCodeSessionId })
+		: undefined;
+}
+
+function deriveTitle(prompt: string): string {
+	const flat = prompt.replace(/\s+/g, " ").trim();
+	return flat.length > 80 ? `${flat.slice(0, 79)}…` : flat;
+}
+
+/**
+ * Deep-truncate any oversized strings before persistence (text-only guard; no
+ * blob store — remora is text-centric and tool outputs are already bounded).
+ * Structural sharing: returns the original value untouched when nothing changed.
+ */
+function prepareForPersistence<T>(value: T): T {
+	if (typeof value === "string") {
+		return (value.length > MAX_PERSIST_CHARS ? truncateString(value) : value) as T;
+	}
+	if (Array.isArray(value)) {
+		let changed = false;
+		const out: unknown[] = new Array(value.length);
+		for (let i = 0; i < value.length; i++) {
+			const item = prepareForPersistence(value[i]);
+			if (item !== value[i]) changed = true;
+			out[i] = item;
+		}
+		return (changed ? out : value) as T;
+	}
+	if (value && typeof value === "object") {
+		let changed = false;
+		const entries: Array<[string, unknown]> = [];
+		for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+			const nv = prepareForPersistence(v);
+			if (nv !== v) changed = true;
+			entries.push([k, nv]);
+		}
+		return (changed ? Object.fromEntries(entries) : value) as T;
+	}
+	return value;
+}
+
+function truncateString(value: string): string {
+	const limit = Math.max(0, MAX_PERSIST_CHARS - TRUNCATION_NOTICE.length);
+	return `${value.slice(0, limit)}${TRUNCATION_NOTICE}`;
 }

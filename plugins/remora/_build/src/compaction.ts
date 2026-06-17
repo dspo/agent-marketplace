@@ -8,17 +8,37 @@ import {
 } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 
+/** Marker set on the synthetic summary message so it isn't double-persisted as a `message` entry. */
+export const COMPACTED_SUMMARY = Symbol("remora:compactedSummary");
+
+/** A compaction event handed to the caller before the summarized messages are discarded. */
+export interface CompactInfo {
+	summary: string;
+	tokensBefore: number;
+	/** Index in the (pre-compaction) messages array of the first kept message. */
+	keepFromIndex: number;
+	/** The original messages being summarized (the caller persists these as `message` entries). */
+	summarized: AgentMessage[];
+}
+
 /**
  * Build a `transformContext` hook that compacts long histories before each LLM
  * call. Below the threshold it returns the messages untouched (zero cost — the
  * common case for a single-turn rescue). Above it, recent messages are kept and
  * the older middle is replaced by a generated summary. Summarization failure
  * degrades gracefully to the original messages rather than aborting the turn.
+ *
+ * When compaction actually fires, `onCompact` is awaited with the originals
+ * BEFORE they are discarded, so the caller can persist them + record a
+ * `compaction` entry. The synthetic summary message carries {@link
+ * COMPACTED_SUMMARY} so the caller skips re-persisting it (the compaction entry
+ * stands in for it on resume).
  */
 export function makeTransformContext(
 	model: Model<"openai-completions">,
 	apiKey: string,
 	onNotice?: (note: string) => void,
+	onCompact?: (info: CompactInfo) => Promise<void> | void,
 ): (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]> {
 	const settings = DEFAULT_COMPACTION_SETTINGS;
 
@@ -43,11 +63,17 @@ export function makeTransformContext(
 			return messages;
 		}
 
+		// Persist the originals + emit the audit event before discarding them.
+		if (onCompact) {
+			await onCompact({ summary: result.value, tokensBefore: estimate.tokens, keepFromIndex: keepFrom, summarized: toSummarize });
+		}
+
 		onNotice?.(`compacted ${toSummarize.length} messages (~${estimate.tokens} ctx tokens)`);
-		const summaryMessage: AgentMessage = {
-			role: "user",
+		const summaryMessage = {
+			role: "user" as const,
 			content: `[Earlier conversation summarized]\n\n${result.value}`,
 			timestamp: 0,
+			[COMPACTED_SUMMARY]: true,
 		};
 		return [summaryMessage, ...recent];
 	};

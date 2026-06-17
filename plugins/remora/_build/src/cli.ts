@@ -1,4 +1,5 @@
 import { loadConfig } from "./config.ts";
+import type { ResumeMode } from "./session.ts";
 import { runTurn } from "./runtime.ts";
 
 /** The structured rescue task, authored by the calling agent (see SKILL.md). */
@@ -13,19 +14,35 @@ interface RescueTask {
 interface CliArgs {
 	command: string;
 	write: boolean;
-	resume: boolean;
+	resumeMode: ResumeMode;
+	resumeId?: string;
 	model?: string;
-	sessionId: string;
 }
 
+/**
+ * Parse resume flags Claude Code style:
+ *   `-c`/`--continue`         → reopen the most-recent session for this cwd
+ *   `-r`/`--resume <id>`       → reopen a specific session by id
+ *   (neither)                  → start a fresh session
+ *
+ * `--resume` with no following id is rejected (the interactive picker is not
+ * supported in a non-interactive CLI). `--session`/the old `default` id are gone.
+ */
 function parseArgs(argv: string[]): CliArgs {
-	const args: CliArgs = { command: argv[0] ?? "", write: false, resume: false, sessionId: "default" };
+	const args: CliArgs = { command: argv[0] ?? "", write: false, resumeMode: "new" };
 	for (let i = 1; i < argv.length; i++) {
 		const a = argv[i];
 		if (a === "--write") args.write = true;
-		else if (a === "--resume") args.resume = true;
-		else if (a === "--model") args.model = argv[++i];
-		else if (a === "--session") args.sessionId = argv[++i] ?? "default";
+		else if (a === "-c" || a === "--continue") args.resumeMode = "continue";
+		else if (a === "-r" || a === "--resume") {
+			const id = argv[i + 1];
+			if (!id || id.startsWith("-")) args.resumeMode = "__invalid_resume__" as ResumeMode;
+			else {
+				args.resumeMode = "id";
+				args.resumeId = id;
+				i++;
+			}
+		} else if (a === "--model") args.model = argv[++i];
 	}
 	return args;
 }
@@ -157,14 +174,19 @@ async function main(): Promise<void> {
 		process.exit(2);
 	}
 
+	if (args.resumeMode === "__invalid_resume__" as ResumeMode) {
+		emit(process.stderr, { type: "error", message: "--resume needs a session id: use `--resume <id>` or `--continue`" });
+		process.exit(2);
+	}
+
 	try {
 		const result = await runTurn(process.cwd(), {
 			prompt: task.prompt,
 			system: buildSystemPrompt(task),
 			write: args.write,
-			resume: args.resume,
+			resumeMode: args.resumeMode,
+			resumeId: args.resumeId,
 			model: args.model,
-			sessionId: args.sessionId,
 			onProgress: (ev) => emit(process.stderr, ev),
 		});
 		process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
