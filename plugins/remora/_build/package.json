@@ -1,0 +1,25 @@
+{
+  "name": "@huayi/remora-plugin-cc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained rescue agent for Claude Code — embeds the pi agent harness, no third-party CLI required.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "node build.mjs && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types src/*.test.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.79.4",
+    "@earendil-works/pi-ai": "0.79.4"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.10",
+    "esbuild": "0.24.2",
+    "typescript": "5.7.3"
+  }
+}

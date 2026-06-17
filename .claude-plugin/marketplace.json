@@ -25,6 +25,11 @@
       "name": "mimo",
       "description": "MiMo 编程助手 — 使用 MiMo 进行代码审查、委托任务和 stop-gate 审查",
       "source": "./plugins/mimo"
+    },
+    {
+      "name": "remora",
+      "description": "remora 自包含 rescue agent — 内嵌 pi agent harness，用非 Claude 模型做交叉验证与第二意见，无须安装第三方 CLI",
+      "source": "./plugins/remora"
     }
   ]
 }
