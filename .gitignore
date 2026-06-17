@@ -4,6 +4,7 @@
 # Plugin build artifacts (compiled scripts are intentionally committed)
 plugins/mimo/_build/node_modules/
 plugins/mimo/_build/tests/.build/
+plugins/remora/_build/node_modules/
 
 # OS files
 .DS_Store

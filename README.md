@@ -18,6 +18,7 @@
 /plugin install mimo
 /plugin install exam-generator
 /plugin install playwright-cli
+/plugin install remora
 ```
 
 > ⚠️ SSH 格式（`git@git.huayi.tech:2222/...`）在 Claude Code 中不可用，
@@ -69,12 +70,19 @@ Codex 通过 `.agents/plugins/marketplace.json` 发现插件，并从每个插�
 │   │   ├── SKILL.md
 │   │   ├── examples/
 │   │   └── templates/
-│   └── playwright-cli/
+│   ├── playwright-cli/
+│   │   ├── .codex-plugin/plugin.json
+│   │   ├── skills/playwright-cli/SKILL.md
+│   │   ├── plugin.json
+│   │   ├── SKILL.md
+│   │   └── references/
+│   └── remora/
 │       ├── .codex-plugin/plugin.json
-│       ├── skills/playwright-cli/SKILL.md
+│       ├── skills/rescue/SKILL.md
 │       ├── plugin.json
-│       ├── SKILL.md
-│       └── references/
+│       ├── commands/*.md
+│       ├── scripts/remora.mjs           # esbuild 单文件产物（已提交）
+│       └── _build/                      # TypeScript 源码和构建配置
 ├── CLAUDE.md
 └── README.md
 ```
