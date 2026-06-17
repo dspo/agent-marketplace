@@ -1,5 +1,5 @@
 {
   "name": "remora",
   "description": "remora 自包含 rescue agent — 内嵌 pi agent harness，用非 Claude 模型做交叉验证与第二意见，无须安装第三方 CLI",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
