@@ -1,6 +1,6 @@
 {
   "name": "gitlab-dev",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "description": "GitLab 开发工作流助手，用于 issue、MR、pipeline、review 与 worktree 交付。",
   "author": {
     "name": "Huayi",
