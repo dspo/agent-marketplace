@@ -1,10 +1,10 @@
 ---
-description: 把卡住的问题委托给 remora rescue agent（自包含、非 Claude 第二意见）
+description: 把卡住的问题委托给 remora task agent（自包含、非 Claude 第二意见）
 argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [要 remora 调查或解决的问题]"
 allowed-tools: Bash(node:*), BashOutput, KillShell
 ---
 
-调用 `remora:rescue` skill 处理用户的请求。按 skill 的流程：把上下文组织成 task JSON → 用 heredoc 经 stdin 喂给 `scripts/remora.mjs` → 读 stdout 结果 → 把 `finalMessage` 原样转达给用户。
+调用 `remora:task` skill 处理用户的请求。按 skill 的流程：把上下文组织成 task JSON → 用 heredoc 经 stdin 喂给 `scripts/remora.mjs` → 读 stdout 结果 → 把 `finalMessage` 原样转达给用户。
 
 用户请求：
 

@@ -2,8 +2,8 @@ import { loadConfig } from "./config.ts";
 import type { ResumeMode } from "./session.ts";
 import { runTurn } from "./runtime.ts";
 
-/** The structured rescue task, authored by the calling agent (see SKILL.md). */
-interface RescueTask {
+/** The structured task, authored by the calling agent (see SKILL.md). */
+interface Task {
 	prompt: string;
 	problem?: string;
 	files?: string[];
@@ -48,13 +48,13 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 /**
- * Read the whole of stdin as UTF-8. The rescue task JSON is piped in this way.
+ * Read the whole of stdin as UTF-8. The task JSON is piped in this way.
  * Fails fast on a TTY: with no pipe, stdin never reaches EOF and the process
  * would hang forever waiting for input.
  */
 async function readStdin(): Promise<string> {
 	if (process.stdin.isTTY) {
-		emit(process.stderr, { type: "error", message: "stdin is a TTY — pipe a JSON task object, e.g. `rescue <<'EOF' … EOF`" });
+		emit(process.stderr, { type: "error", message: "stdin is a TTY — pipe a JSON task object, e.g. `task <<'EOF' … EOF`" });
 		process.exit(2);
 	}
 	const chunks: Buffer[] = [];
@@ -63,9 +63,9 @@ async function readStdin(): Promise<string> {
 }
 
 /** Compose the system prompt from the structured task fields. */
-function buildSystemPrompt(task: RescueTask): string {
+function buildSystemPrompt(task: Task): string {
 	const lines = [
-		"You are remora, a focused rescue agent invoked to make progress on a problem the primary agent is stuck on.",
+		"You are remora, a focused task agent invoked to make progress on a problem the primary agent is stuck on.",
 		"You operate in a read-only investigation mode unless told otherwise: read code, search, and reason.",
 		"Be concrete. Diagnose the root cause, then state the smallest correct fix. Cite files as path:line.",
 		"Return a direct, self-contained answer — your final message is the entire deliverable.",
@@ -151,20 +151,20 @@ async function main(): Promise<void> {
 		await runSetup();
 		return;
 	}
-	if (args.command !== "rescue") {
+	if (args.command !== "task") {
 		emit(process.stderr, { type: "error", message: `unknown command: ${args.command || "(none)"}` });
 		process.exit(2);
 	}
 
 	const raw = await readStdin();
 	if (!raw.trim()) {
-		emit(process.stderr, { type: "error", message: "no task on stdin: pipe a JSON task object to `rescue`" });
+		emit(process.stderr, { type: "error", message: "no task on stdin: pipe a JSON task object to `task`" });
 		process.exit(2);
 	}
 
-	let task: RescueTask;
+	let task: Task;
 	try {
-		task = JSON.parse(raw) as RescueTask;
+		task = JSON.parse(raw) as Task;
 	} catch (err) {
 		emit(process.stderr, { type: "error", message: `task on stdin is not valid JSON: ${(err as Error).message}` });
 		process.exit(2);
