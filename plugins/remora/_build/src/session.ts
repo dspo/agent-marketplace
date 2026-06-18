@@ -107,7 +107,12 @@ export function appendModelChangeEntry(
 	return session.appendModelChange(provider, modelId);
 }
 
-/** Auto-title derived from the first prompt, stored as a `session_info` entry. */
+/**
+ * Auto-title derived from the first prompt, stored as a `session_info` entry.
+ * `deriveTitle` can return "" for blank/whitespace input; the guard skips the
+ * entry in that case so `appendSessionName("")` is never called. (In practice
+ * the prompt is validated non-empty upstream, so this is purely defensive.)
+ */
 export function appendTitleEntry(session: Session<JsonlSessionMetadata>, firstPrompt: string): Promise<string> | undefined {
 	const title = deriveTitle(firstPrompt);
 	return title ? session.appendSessionName(title) : undefined;

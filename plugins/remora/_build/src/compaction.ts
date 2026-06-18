@@ -69,6 +69,10 @@ export function makeTransformContext(
 		}
 
 		onNotice?.(`compacted ${toSummarize.length} messages (~${estimate.tokens} ctx tokens)`);
+		// Synthetic message standing in for the summarized history. `timestamp: 0`
+		// flags it as non-real (it was never produced at a wall-clock instant); it
+		// also carries the COMPACTED_SUMMARY marker so runtime skips persisting it
+		// as a `message` entry — the `compaction` entry stands in for it on resume.
 		const summaryMessage = {
 			role: "user" as const,
 			content: `[Earlier conversation summarized]\n\n${result.value}`,

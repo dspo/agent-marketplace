@@ -25,8 +25,9 @@ interface CliArgs {
  *   `-r`/`--resume <id>`       → reopen a specific session by id
  *   (neither)                  → start a fresh session
  *
- * `--resume` with no following id is rejected (the interactive picker is not
- * supported in a non-interactive CLI). `--session`/the old `default` id are gone.
+ * `--resume` with no following id sets `resumeMode: "id"` but leaves `resumeId`
+ * unset — main() rejects that combo. This keeps `ResumeMode` a pure union (no
+ * sentinel value leaks into the type). `--session`/the old `default` id are gone.
  */
 function parseArgs(argv: string[]): CliArgs {
 	const args: CliArgs = { command: argv[0] ?? "", write: false, resumeMode: "new" };
@@ -35,10 +36,9 @@ function parseArgs(argv: string[]): CliArgs {
 		if (a === "--write") args.write = true;
 		else if (a === "-c" || a === "--continue") args.resumeMode = "continue";
 		else if (a === "-r" || a === "--resume") {
+			args.resumeMode = "id";
 			const id = argv[i + 1];
-			if (!id || id.startsWith("-")) args.resumeMode = "__invalid_resume__" as ResumeMode;
-			else {
-				args.resumeMode = "id";
+			if (id && !id.startsWith("-")) {
 				args.resumeId = id;
 				i++;
 			}
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
 		process.exit(2);
 	}
 
-	if (args.resumeMode === "__invalid_resume__" as ResumeMode) {
+	if (args.resumeMode === "id" && !args.resumeId) {
 		emit(process.stderr, { type: "error", message: "--resume needs a session id: use `--resume <id>` or `--continue`" });
 		process.exit(2);
 	}
