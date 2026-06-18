@@ -2,7 +2,7 @@ import { loadConfig } from "./config.ts";
 import { formatSessionDumpText } from "./session-dump-format.ts";
 import { formatSessionHistoryMarkdown } from "./session-history-format.ts";
 import { listSessions } from "./session-listing.ts";
-import { loadMessages, openOrCreateSession, type ResumeMode } from "./session.ts";
+import { loadAllMessages, openOrCreateSession, type ResumeMode } from "./session.ts";
 import { runTurn } from "./runtime.ts";
 
 /** The structured task, authored by the calling agent (see SKILL.md). */
@@ -177,7 +177,7 @@ async function runSessions(subcommand?: string): Promise<void> {
  */
 async function runDump(id: string, verbose: boolean): Promise<void> {
 	const { session } = await openOrCreateSession(process.cwd(), "id", id);
-	const messages = await loadMessages(session);
+	const messages = await loadAllMessages(session);
 	const text = verbose
 		? formatSessionDumpText({ messages })
 		: formatSessionHistoryMarkdown(messages);

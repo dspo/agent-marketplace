@@ -19,6 +19,13 @@ export interface CompactInfo {
 	keepFromIndex: number;
 	/** The original messages being summarized (the caller persists these as `message` entries). */
 	summarized: AgentMessage[];
+	/**
+	 * Entry id of the first kept message, so the `compaction` entry can record an
+	 * exact cut point for resume (matches pi's `firstKeptEntryId`). Resolved via
+	 * {@link makeTransformContext}'s `entryIdOf`; empty when the kept message isn't
+	 * a persisted history message (rare: only brand-new-this-turn messages kept).
+	 */
+	firstKeptEntryId: string;
 }
 
 /**
@@ -39,6 +46,7 @@ export function makeTransformContext(
 	apiKey: string,
 	onNotice?: (note: string) => void,
 	onCompact?: (info: CompactInfo) => Promise<void> | void,
+	entryIdOf?: (message: AgentMessage) => string | undefined,
 ): (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]> {
 	const settings = DEFAULT_COMPACTION_SETTINGS;
 
@@ -63,9 +71,20 @@ export function makeTransformContext(
 			return messages;
 		}
 
+		// Resolve the cut-point entry id from the first kept message. This lets the
+		// `compaction` entry record an exact `firstKeptEntryId` so resume slices
+		// correctly (keeping the recent tail rather than reloading the originals).
+		const firstKeptEntryId = entryIdOf?.(messages[keepFrom]) ?? "";
+
 		// Persist the originals + emit the audit event before discarding them.
 		if (onCompact) {
-			await onCompact({ summary: result.value, tokensBefore: estimate.tokens, keepFromIndex: keepFrom, summarized: toSummarize });
+			await onCompact({
+				summary: result.value,
+				tokensBefore: estimate.tokens,
+				keepFromIndex: keepFrom,
+				summarized: toSummarize,
+				firstKeptEntryId,
+			});
 		}
 
 		onNotice?.(`compacted ${toSummarize.length} messages (~${estimate.tokens} ctx tokens)`);

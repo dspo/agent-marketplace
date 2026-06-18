@@ -20,6 +20,7 @@ import {
 	resolveImageData,
 	resolveImageDataUrl,
 } from "./blob-store.ts";
+import { COMPACTED_SUMMARY } from "./compaction.ts";
 
 /** Shared content-addressed blob store, mirroring oh-my-pi. See blob-store.ts. */
 let _blobStore: BlobStore | undefined;
@@ -88,28 +89,110 @@ export async function openOrCreateSession(
 }
 
 /**
- * Reconstruct the message history from the session's typed entries (for resume).
+ * Reconstruct the message history from the session's typed entries (for resume),
+ * applying the **last** `compaction` entry the same way pi's `buildContext` does:
+ * a summary message stands in for everything summarized, then only messages at
+ * or after `firstKeptEntryId` (before the compaction entry) plus everything after
+ * it are kept. This keeps the resumed history bounded — without it, every
+ * summarized original would reload on resume and inflate the context past the
+ * window, defeating the compaction that recorded the summary.
  *
- * Unlike oh-my-pi (which relies on pi's `buildContext` to apply persisted
- * `compaction` entries), remora loads the **raw message entries** and lets its
- * own `transformContext` hook re-compact fresh when over threshold. This makes
- * compaction entries **audit-only** for remora — they are never used to
- * reconstruct messages — which sidesteps the multi-compaction-resume pitfall
- * (where `firstKeptEntryId=""` would wrongly drop kept messages that precede a
- * later compaction entry). Below threshold there is zero cost: `transformContext`
- * returns the messages untouched, so no summary is regenerated.
+ * Unlike calling pi's `buildContext()` directly, this keeps the **raw
+ * `entry.message` references** so the runtime can back-fill a subsequent
+ * compaction's `firstKeptEntryId` via the {@link loadMessagesWithEntryIds} map.
  *
- * Blob refs (`blob:sha256:<hash>`) persisted in image blocks / `image_url` fields
- * are rehydrated back to base64 / data URLs so the agent resumes with real
- * images. Missing blobs degrade gracefully (the ref string is kept as-is).
+ * Blob refs (`blob:sha256:<hash>`) are rehydrated back to base64 / data URLs so
+ * the agent resumes with real images. Missing blobs degrade gracefully (the ref
+ * string is kept as-is).
  */
 export async function loadMessages(session: Session<JsonlSessionMetadata>): Promise<AgentMessage[]> {
+	const { messages } = await loadMessagesWithEntryIds(session);
+	return messages;
+}
+
+/**
+ * Load **every** raw `message` entry, ignoring compaction slicing. Used for
+ * `dump`/transcript review where completeness matters (shows summarized
+ * originals too), as opposed to {@link loadMessages} which is compaction-aware
+ * for agent resume.
+ */
+export async function loadAllMessages(session: Session<JsonlSessionMetadata>): Promise<AgentMessage[]> {
 	const entries = await session.getEntries();
 	const messages = entries
 		.filter((e): e is MessageEntry => e.type === "message")
 		.map((e) => e.message);
 	rehydrateBlobRefs(messages);
 	return messages;
+}
+
+/**
+ * Like {@link loadMessages} but also returns a reference-keyed map from each raw
+ * kept message to its entry id. The compaction hook uses this to record an exact
+ * `firstKeptEntryId` when it keeps a history message — so the *next* resume slices
+ * correctly. (Multi-round safe: the map is rebuilt every resume over that turn's
+ * raw entry objects, and the compaction callback runs within the same turn, so
+ * the lookup resolves to a real entry id.)
+ */
+export async function loadMessagesWithEntryIds(
+	session: Session<JsonlSessionMetadata>,
+): Promise<{ messages: AgentMessage[]; entryIdByMessage: WeakMap<object, string> }> {
+	const entries = await session.getEntries();
+	const entryIdByMessage = new WeakMap<object, string>();
+
+	// Last compaction entry wins (matches pi's buildSessionContext: the loop keeps
+	// overwriting `compaction`, so the most recent one governs the slice).
+	let lastCompactionIdx = -1;
+	for (let i = entries.length - 1; i >= 0; i--) {
+		if (entries[i].type === "compaction") {
+			lastCompactionIdx = i;
+			break;
+		}
+	}
+
+	const messages: AgentMessage[] = [];
+	const take = (e: MessageEntry) => {
+		messages.push(e.message);
+		entryIdByMessage.set(e.message as object, e.id);
+	};
+
+	if (lastCompactionIdx === -1) {
+		for (const e of entries) if (e.type === "message") take(e as MessageEntry);
+	} else {
+		const compaction = entries[lastCompactionIdx] as Extract<(typeof entries)[number], { type: "compaction" }>;
+		// Summary stands in for everything dropped before the kept tail. It is a
+		// runtime-only synthetic (marked), so flush never persists it as a `message`
+		// entry — the `compaction` entry is its durable record.
+		messages.push(summaryMessage(compaction.summary));
+		// `firstKeptEntryId=""` → no entry matches, so nothing before the compaction
+		// entry is kept (matches pi's buildSessionContext: the cut point is the
+		// session start). Otherwise keep from the matched entry onward.
+		const firstKeptId = compaction.firstKeptEntryId;
+		let keeping = false;
+		for (let i = 0; i < lastCompactionIdx; i++) {
+			const e = entries[i];
+			if (e.type !== "message") continue;
+			if (!keeping && firstKeptId && e.id === firstKeptId) keeping = true;
+			if (keeping) take(e as MessageEntry);
+		}
+		for (let i = lastCompactionIdx + 1; i < entries.length; i++) {
+			const e = entries[i];
+			if (e.type === "message") take(e as MessageEntry);
+		}
+	}
+
+	rehydrateBlobRefs(messages);
+	return { messages, entryIdByMessage };
+}
+
+/** Synthetic summary message standing in for a compaction's dropped history (resume only). */
+function summaryMessage(summary: string): AgentMessage {
+	return {
+		role: "user",
+		content: `[Earlier conversation summarized]\n\n${summary}`,
+		// `timestamp: 0` flags it as non-real; COMPACTED_SUMMARY makes flush skip it.
+		timestamp: 0,
+		[COMPACTED_SUMMARY]: true,
+	} as AgentMessage;
 }
 
 /**

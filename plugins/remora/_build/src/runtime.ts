@@ -13,7 +13,7 @@ import {
 	appendMessageEntry,
 	appendModelChangeEntry,
 	appendTitleEntry,
-	loadMessages,
+	loadMessagesWithEntryIds,
 	openOrCreateSession,
 	type ResumeMode,
 } from "./session.ts";
@@ -55,12 +55,16 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 	const { session, metadata, isNew } = await openOrCreateSession(cwd, opts.resumeMode, opts.resumeId);
 	opts.onProgress({ type: "session", id: metadata.id, path: metadata.path });
 
-	const history = isNew ? [] : await loadMessages(session);
+	const { messages: history, entryIdByMessage } = isNew
+		? { messages: [] as AgentMessage[], entryIdByMessage: new WeakMap<object, string>() }
+		: await loadMessagesWithEntryIds(session);
 
 	// Idempotent persistence tracker: by message reference, so a compacted
 	// history never re-appends already-persisted messages and originals are
 	// captured exactly once (the compaction callback persists the summarized
-	// tail before it is discarded from state.messages).
+	// tail before it is discarded from state.messages). Message objects keep
+	// their reference even when pi appends streaming content blocks in place —
+	// in-place mutation does not change identity, so the WeakSet stays valid.
 	const persisted = new WeakSet<object>();
 	for (const m of history) persisted.add(m);
 
@@ -96,12 +100,19 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 			(note) => opts.onProgress({ type: "compaction", detail: note }),
 			async (info) => {
 				await flush(info.summarized);
-				// `firstKeptEntryId` is audit-only for remora: loadMessages reconstructs
-				// from raw message entries (not pi's buildContext compaction view), so
-				// the compaction entry is never used to slice the history on resume.
-				// We persist a faithful record of the summary for observability.
-				await appendCompactionEntry(session, { summary: info.summary, firstKeptEntryId: "", tokensBefore: info.tokensBefore });
+				// Record an exact cut point so resume slices the history to
+				// [summary, ...recent] instead of reloading the summarized originals
+				// (which would inflate the context past the window on resume).
+				await appendCompactionEntry(session, {
+					summary: info.summary,
+					firstKeptEntryId: info.firstKeptEntryId,
+					tokensBefore: info.tokensBefore,
+				});
 			},
+			// Resolve a kept history message → its persisted entry id (from the
+			// load-time map). Brand-new-this-turn messages have no id yet and fall
+			// back to "", which loadMessages treats as "cut at session start".
+			(m) => entryIdByMessage.get(m as object),
 		),
 		getApiKey: async () => cfg.apiKey,
 	});

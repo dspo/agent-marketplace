@@ -49,14 +49,21 @@ export class ArtifactManager {
 	/** Ensure the dir exists and nextId is scanned exactly once, even under concurrency. */
 	private ensureDir(): Promise<void> {
 		if (!this.initPromise) {
+			// On resolve AND reject, clear the cached promise so a later call re-inits
+			// (e.g. after a transient mkdir/scan failure, or if the dir is removed
+			// externally). Caching a rejection would permanently wedge the manager.
 			this.initPromise = (async () => {
-				if (!this.dirCreated) {
-					await mkdir(this.dir, { recursive: true });
-					this.dirCreated = true;
-				}
-				if (!this.initialized) {
-					await this.scanExistingIds();
-					this.initialized = true;
+				try {
+					if (!this.dirCreated) {
+						await mkdir(this.dir, { recursive: true });
+						this.dirCreated = true;
+					}
+					if (!this.initialized) {
+						await this.scanExistingIds();
+						this.initialized = true;
+					}
+				} finally {
+					this.initPromise = null;
 				}
 			})();
 		}
