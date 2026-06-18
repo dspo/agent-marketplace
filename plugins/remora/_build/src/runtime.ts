@@ -6,6 +6,7 @@ import { COMPACTED_SUMMARY, makeTransformContext } from "./compaction.ts";
 import type { FileEdit } from "./diff.ts";
 import { makeBeforeToolCall } from "./permissions.ts";
 import {
+	appendActiveToolsChangeEntry,
 	appendCompactionEntry,
 	appendLineageEntry,
 	appendMessageEntry,
@@ -78,11 +79,12 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 
 	const edits: FileEdit[] = [];
 	const model = resolveModel(cfg);
+	const tools = buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e) });
 	const agent = new Agent({
 		initialState: {
 			systemPrompt: opts.system,
 			model,
-			tools: buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e) }),
+			tools,
 			messages: history,
 		},
 		beforeToolCall: makeBeforeToolCall(Boolean(opts.write), cwd),
@@ -92,10 +94,10 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 			(note) => opts.onProgress({ type: "compaction", detail: note }),
 			async (info) => {
 				await flush(info.summarized);
-				// `firstKeptEntryId=""` is correct for remora's append pattern: on
-				// resume buildContext then excludes all entries preceding this
-				// compaction entry and appends only the post-compaction recent tail,
-				// reconstructing exactly [summary, ...recent].
+				// `firstKeptEntryId` is audit-only for remora: loadMessages reconstructs
+				// from raw message entries (not pi's buildContext compaction view), so
+				// the compaction entry is never used to slice the history on resume.
+				// We persist a faithful record of the summary for observability.
 				await appendCompactionEntry(session, { summary: info.summary, firstKeptEntryId: "", tokensBefore: info.tokensBefore });
 			},
 		),
@@ -110,6 +112,7 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 	if (isNew) {
 		await appendLineageEntry(session);
 		await appendModelChangeEntry(session, cfg.provider, cfg.model);
+		await appendActiveToolsChangeEntry(session, tools.map((t) => t.name));
 		await appendTitleEntry(session, opts.prompt);
 	}
 

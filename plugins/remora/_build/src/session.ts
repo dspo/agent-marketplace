@@ -6,6 +6,7 @@ import {
 	type AgentMessage,
 	type JsonlSessionMetadata,
 	JsonlSessionRepo,
+	type MessageEntry,
 	type Session,
 } from "@earendil-works/pi-agent-core";
 import {
@@ -88,12 +89,25 @@ export async function openOrCreateSession(
 
 /**
  * Reconstruct the message history from the session's typed entries (for resume).
+ *
+ * Unlike oh-my-pi (which relies on pi's `buildContext` to apply persisted
+ * `compaction` entries), remora loads the **raw message entries** and lets its
+ * own `transformContext` hook re-compact fresh when over threshold. This makes
+ * compaction entries **audit-only** for remora — they are never used to
+ * reconstruct messages — which sidesteps the multi-compaction-resume pitfall
+ * (where `firstKeptEntryId=""` would wrongly drop kept messages that precede a
+ * later compaction entry). Below threshold there is zero cost: `transformContext`
+ * returns the messages untouched, so no summary is regenerated.
+ *
  * Blob refs (`blob:sha256:<hash>`) persisted in image blocks / `image_url` fields
- * are rehydrated back to base64 / data URLs so the agent resumes with real images.
- * Missing blobs degrade gracefully (the ref string is kept as-is).
+ * are rehydrated back to base64 / data URLs so the agent resumes with real
+ * images. Missing blobs degrade gracefully (the ref string is kept as-is).
  */
 export async function loadMessages(session: Session<JsonlSessionMetadata>): Promise<AgentMessage[]> {
-	const messages = (await session.buildContext()).messages;
+	const entries = await session.getEntries();
+	const messages = entries
+		.filter((e): e is MessageEntry => e.type === "message")
+		.map((e) => e.message);
 	rehydrateBlobRefs(messages);
 	return messages;
 }
@@ -151,6 +165,14 @@ export function appendModelChangeEntry(
 	modelId: string,
 ): Promise<string> {
 	return session.appendModelChange(provider, modelId);
+}
+
+/** Record the active tool set at session start (aligns with oh-my-pi's tool-tracking entry). */
+export function appendActiveToolsChangeEntry(
+	session: Session<JsonlSessionMetadata>,
+	toolNames: string[],
+): Promise<string> {
+	return session.appendActiveToolsChange(toolNames);
 }
 
 /**
