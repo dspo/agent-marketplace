@@ -19,7 +19,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" setup
 根据报告给用户清晰反馈：
 
 - `ready: true` —— 告诉用户 remora 已就绪，可以用 `/remora:rescue`。
-- 配置缺失（`config error`）—— 提示用户设置 `REMORA_BASE_URL` / `REMORA_MODEL` 和 API key（`REMORA_API_KEY` 或 `.remora/config.json` 的 `apiKeyEnv`），或创建 `.remora/config.json`。
+- 配置缺失（`config error`）—— 提示用户设置 `REMORA_BASE_URL` / `REMORA_MODEL` 和 API key（`REMORA_API_KEY` 或 `.remora/config.json` 的 `apiKey` spec：`keychain:SERVICE` / `env:VAR` / 裸 `VAR`；旧字段 `apiKeyEnv` 仍兼容），或创建 `.remora/config.json`。
 - 鉴权/连通失败 —— 透传 `message` 里的 HTTP 状态或错误，提示检查 baseUrl、model 名、API key 是否正确。
 
 不要把 API key 明文回显给用户。
