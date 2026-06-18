@@ -176,7 +176,8 @@ export function resolveModel(cfg: ProviderConfig): Model<"openai-completions"> {
 
 ```ts
 new Agent({ /* ... */, getApiKey: async () => readApiKey() });
-// readApiKey: 取 REMORA_API_KEY，回退 DASHSCOPE_API_KEY；都没有则报错让用户跑 /remora:setup
+// readApiKey (config.ts resolveApiKey): 优先级 REMORA_API_KEY > config apiKey spec > legacy apiKeyEnv > DASHSCOPE_API_KEY。
+// apiKey spec 支持 keychain:SERVICE[:ACCOUNT] / env:VAR / 裸 VAR(=env)；未知 scheme 抛错。keychain 走 spawnSync("security find-generic-password -s SERVICE -a <当前用户> -w")，仅 darwin 生效，同步不改 loadConfig 签名。
 ```
 
 **POC 验证配置（已端到端跑通）**——取自 `~/.config/cx/cx.providers.config.yaml` 的「百炼」(阿里云 DashScope)：
@@ -190,7 +191,7 @@ new Agent({ /* ... */, getApiKey: async () => readApiKey() });
 ```
 
 - **model id 已实测**：直接 `curl` DashScope `/chat/completions` 用 `deepseek-v4-pro` 返回正常；`[1m]` 是 cx 专属标注，发往真实 API 用裸 id。
-- API key 存于 macOS keychain（`security find-generic-password -s DASHSCOPE_API_KEY -w`，实测可读出 `sk-...`）。remora 从 `REMORA_API_KEY`（回退 `DASHSCOPE_API_KEY`）取，**不落盘明文**。
+- API key 存于 macOS keychain（`security find-generic-password -s DASHSCOPE_API_KEY -w`，实测可读出 `sk-...`）。remora 既可从 `REMORA_API_KEY`（回退 `DASHSCOPE_API_KEY`）取，也支持 config `apiKey: "keychain:DASHSCOPE_API_KEY"` **直接读 keychain**（account 默认当前用户），**不落盘明文**。
 - function-calling、流式、重试、错误归类全部由 pi-ai 负责。**spike 已用打包后 bundle + 真实端点跑通**：`agent.prompt()` 正常返回、`agent_end` 触发、`errorMessage` 为空。
 
 ### 5.3 `tools.ts` —— `AgentTool[]`（路线 B：自写）

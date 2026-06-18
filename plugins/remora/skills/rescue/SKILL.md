@@ -102,11 +102,17 @@ CLI 非零退出时，stderr 末行是一个 `{"type":"error","message":"..."}` 
   "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
   "model": "deepseek-v4-pro",
   "provider": "dashscope",
-  "apiKeyEnv": "DASHSCOPE_API_KEY"   // 从该环境变量读 key；也可直接设 REMORA_API_KEY
+  "apiKey": "keychain:DASHSCOPE_API_KEY"   // 来源 spec，见下
 }
 ```
 
-API key **不落盘明文**：CLI 从 `REMORA_API_KEY`（回退 `apiKeyEnv` 指定的变量，再回退 `DASHSCOPE_API_KEY`）读取。
+`apiKey` 是一个**来源 spec 字符串**，声明 key 从哪取：
+
+- `keychain:SERVICE` —— 从 macOS keychain 读（`security find-generic-password -s SERVICE -a <当前用户> -w`）。account 默认当前登录用户；要指定别的 account 用 `keychain:SERVICE:ACCOUNT`。
+- `env:VAR` —— 从环境变量 `VAR` 读。
+- 裸 `VAR`（无前缀）—— 默认 env。
+
+API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `apiKey` spec > legacy `apiKeyEnv`（env-only，向后兼容）> `DASHSCOPE_API_KEY` 环境变量兜底。keychain 只在 macOS 生效。
 
 ## 安全模型
 
