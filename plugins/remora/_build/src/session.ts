@@ -8,6 +8,24 @@ import {
 	JsonlSessionRepo,
 	type Session,
 } from "@earendil-works/pi-agent-core";
+import {
+	BLOB_EXTERNALIZE_THRESHOLD,
+	BlobStore,
+	externalizeImageBlockSync,
+	externalizeImageDataUrlSync,
+	isBlobRef,
+	isImageBlock,
+	isImageDataUrl,
+	resolveImageData,
+	resolveImageDataUrl,
+} from "./blob-store.ts";
+
+/** Shared content-addressed blob store, mirroring oh-my-pi. See blob-store.ts. */
+let _blobStore: BlobStore | undefined;
+function blobStore(): BlobStore {
+	// Lazily constructed so REMORA_BLOBS_DIR set at runtime (or in tests) is honored.
+	return (_blobStore ??= new BlobStore());
+}
 import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
 
 const MAX_PERSIST_CHARS = 500_000;
@@ -68,9 +86,37 @@ export async function openOrCreateSession(
 	return { session, metadata: await session.getMetadata(), isNew: true };
 }
 
-/** Reconstruct the message history from the session's typed entries (for resume). */
+/**
+ * Reconstruct the message history from the session's typed entries (for resume).
+ * Blob refs (`blob:sha256:<hash>`) persisted in image blocks / `image_url` fields
+ * are rehydrated back to base64 / data URLs so the agent resumes with real images.
+ * Missing blobs degrade gracefully (the ref string is kept as-is).
+ */
 export async function loadMessages(session: Session<JsonlSessionMetadata>): Promise<AgentMessage[]> {
-	return (await session.buildContext()).messages;
+	const messages = (await session.buildContext()).messages;
+	rehydrateBlobRefs(messages);
+	return messages;
+}
+
+/**
+ * Walk messages and resolve any `blob:sha256:<hash>` references back to their
+ * base64 (image block `data`) or original data-URL (`image_url`) form. Mirrors
+ * oh-my-pi's `resolveBlobRefsInEntries`, in place.
+ */
+function rehydrateBlobRefs(messages: AgentMessage[]): void {
+	for (const msg of messages) {
+		const content = (msg as { content?: unknown }).content;
+		if (!Array.isArray(content)) continue;
+		for (const block of content) {
+			if (isImageBlock(block) && isBlobRef(block.data)) {
+				block.data = resolveImageData(blobStore(), block.data);
+			}
+		}
+		const imageUrl = (msg as { image_url?: string }).image_url;
+		if (typeof imageUrl === "string" && isBlobRef(imageUrl)) {
+			(msg as { image_url?: string }).image_url = resolveImageDataUrl(blobStore(), imageUrl);
+		}
+	}
 }
 
 /**
@@ -137,18 +183,48 @@ function deriveTitle(prompt: string): string {
 }
 
 /**
- * Deep-truncate any oversized strings before persistence (text-only guard; no
- * blob store — remora is text-centric and tool outputs are already bounded).
+ * Prepare a value for persistence: truncate oversized strings AND externalize
+ * large image payloads to the blob store (mirroring oh-my-pi).
+ *
+ * - `content` arrays: image blocks whose base64 `data` is ≥ threshold become
+ *   `{ …, data: "blob:sha256:<hash>" }`.
+ * - `image_url` strings that are `data:image/...;base64,...` → `blob:sha256:<hash>`.
+ * - any other string > MAX_PERSIST_CHARS is truncated (crypto signatures cleared,
+ *   not truncated, since a partial signature is invalid).
+ *
  * Structural sharing: returns the original value untouched when nothing changed.
+ * The blob write is synchronous so bytes land in the page cache before the JSONL
+ * line referencing them is appended (OOM-safe).
  */
-function prepareForPersistence<T>(value: T): T {
+function prepareForPersistence<T>(value: T, key?: string): T {
 	if (typeof value === "string") {
-		return (value.length > MAX_PERSIST_CHARS ? truncateString(value) : value) as T;
+		if (key === "image_url" && isImageDataUrl(value)) {
+			return externalizeImageDataUrlSync(blobStore(), value) as T;
+		}
+		if (value.length > MAX_PERSIST_CHARS) {
+			// Signatures must be exact or absent — truncating produces an invalid sig.
+			if (key === "thinkingSignature" || key === "thoughtSignature" || key === "textSignature") {
+				return "" as T;
+			}
+			return truncateString(value) as T;
+		}
+		return value;
 	}
 	if (Array.isArray(value)) {
 		let changed = false;
 		const out: unknown[] = new Array(value.length);
 		for (let i = 0; i < value.length; i++) {
+			// Image block inside a `content` array → externalize its base64 data.
+			if (
+				key === "content" &&
+				isImageBlock(value[i]) &&
+				!isBlobRef((value[i] as { data: string }).data) &&
+				(value[i] as { data: string }).data.length >= BLOB_EXTERNALIZE_THRESHOLD
+			) {
+				out[i] = externalizeImageBlockSync(blobStore(), value[i]);
+				changed = true;
+				continue;
+			}
 			const item = prepareForPersistence(value[i]);
 			if (item !== value[i]) changed = true;
 			out[i] = item;
@@ -159,7 +235,7 @@ function prepareForPersistence<T>(value: T): T {
 		let changed = false;
 		const entries: Array<[string, unknown]> = [];
 		for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-			const nv = prepareForPersistence(v);
+			const nv = prepareForPersistence(v, k);
 			if (nv !== v) changed = true;
 			entries.push([k, nv]);
 		}

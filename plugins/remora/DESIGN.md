@@ -303,7 +303,7 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 
 **记录宿主 Claude Code session id**：remora 是 Claude Code spawn 的子进程，CC 给子进程注入 `CLAUDE_CODE_SESSION_ID`（UUIDv4，已实测）。新建 session 时用 `appendCustomEntry("remora:lineage", { claudeCodeSessionId })` 记下 parent CC session（pi 的 custom entry 是"扩展私有数据"的官方逃生口，不占用 header 的 `parentSessionPath` 字段——后者语义是 parent session 文件路径，与"一个 CC session id"不符）。CC 外手动跑时该 env 不存在则跳过；resume 同一 session 不重复记。
 
-> **轻量截断保护**（text-only）：append 前对任何 > 500 000 字符的字符串截断（带 `[truncated]` 标记），port oh-my-pi `truncateForPersistence` 的简化版。**无 blob store**——remora 文本为主，bash 输出已封顶 64 KiB、写入封顶 1 MiB。
+> **持久化保护 = 截断 + Blob 外化**（对齐 oh-my-pi）：`prepareForPersistence` 递归处理每条消息——(1) `content` 数组里 base64 ≥ 1 KiB 的图片块外化到内容寻址 blob store（`~/.remora/blobs/<sha256>`，SHA-256 over raw bytes，自动去重），JSONL 里只存 `blob:sha256:<hash>` 引用；(2) `image_url` data URL 同理外化；(3) 其余 > 500 000 字符的字符串截断（带 `[truncated]` 标记，crypto 签名字段清空而非截断）。blob 写同步落盘（page cache）后才写引用它的 JSONL 行——OOM/SIGKILL 不会留悬空 ref。**读路径**（`loadMessages`）在 resume 时把 `blob:` ref 还原回 base64/data URL，blob 缺失则优雅降级（保留 ref 字符串）。见 `blob-store.ts`。
 
 ## 6. 命令面
 
