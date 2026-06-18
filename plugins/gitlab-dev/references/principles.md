@@ -20,9 +20,12 @@
 
 ## Worktree 规则
 
+> **强制规则**：所有代码实现必须在 worktree 中完成，严禁在 root worktree（主目录）进行任何代码变更。
+
 - 新 worktree 放到 **root worktree 平级**，而不是放到 root worktree 下的子目录中。
 - 命名规则：`${root_worktree_name}--$(basename "$branch_name")`
 - 例如：root worktree 为 `huayi-dev-agent-skills`，branch 为 `fix/codex-marketplace-install`，则 worktree 名为 `huayi-dev-agent-skills--fix-codex-marketplace-install`。
+- 每次开始实现前，用 `git worktree list` 确认当前所在目录不是 root worktree。
 
 ## 交付要求
 
