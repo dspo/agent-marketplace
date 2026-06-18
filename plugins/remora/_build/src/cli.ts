@@ -1,5 +1,8 @@
 import { loadConfig } from "./config.ts";
-import type { ResumeMode } from "./session.ts";
+import { formatSessionDumpText } from "./session-dump-format.ts";
+import { formatSessionHistoryMarkdown } from "./session-history-format.ts";
+import { listSessions } from "./session-listing.ts";
+import { loadMessages, openOrCreateSession, type ResumeMode } from "./session.ts";
 import { runTurn } from "./runtime.ts";
 
 /** The structured task, authored by the calling agent (see SKILL.md). */
@@ -144,11 +147,63 @@ async function runSetup(): Promise<void> {
 	process.exit(report.ready ? 0 : 1);
 }
 
+/**
+ * `sessions list`: enumerate this cwd's sessions newest-first, each with its
+ * derived lifecycle status (complete/interrupted/aborted/error/pending) and
+ * auto-title. For discovering what to `--resume`.
+ */
+async function runSessions(subcommand?: string): Promise<void> {
+	if (subcommand !== "list" && subcommand !== undefined) {
+		emit(process.stderr, { type: "error", message: `unknown sessions subcommand: ${subcommand} (expected: list)` });
+		process.exit(2);
+	}
+	const items = await listSessions(process.cwd());
+	if (items.length === 0) {
+		process.stdout.write("(no sessions in this cwd)\n");
+		process.exit(0);
+	}
+	for (const item of items) {
+		const when = item.createdAt.replace(/\.\d{3}.*$/, "").replace("T", " ");
+		const title = item.title ? ` ${item.title}` : "";
+		process.stdout.write(`${when}  [${item.status.padEnd(11)}]  ${item.id}${title}\n`);
+	}
+	process.exit(0);
+}
+
+/**
+ * `dump <id>`: render a session's transcript as markdown for review.
+ * Default: concise transcript (tool calls one-lined). `--verbose`: full dump
+ * (system prompt / config / tool inventory / per-message blocks).
+ */
+async function runDump(id: string, verbose: boolean): Promise<void> {
+	const { session } = await openOrCreateSession(process.cwd(), "id", id);
+	const messages = await loadMessages(session);
+	const text = verbose
+		? formatSessionDumpText({ messages })
+		: formatSessionHistoryMarkdown(messages);
+	process.stdout.write(`${text}\n`);
+	process.exit(0);
+}
+
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 
 	if (args.command === "setup") {
 		await runSetup();
+		return;
+	}
+	if (args.command === "sessions") {
+		await runSessions(process.argv[3]);
+		return;
+	}
+	if (args.command === "dump") {
+		const id = process.argv[3];
+		const verbose = process.argv.slice(4).includes("--verbose");
+		if (!id) {
+			emit(process.stderr, { type: "error", message: "dump needs a session id: `dump <id> [--verbose]`" });
+			process.exit(2);
+		}
+		await runDump(id, verbose);
 		return;
 	}
 	if (args.command !== "task") {
