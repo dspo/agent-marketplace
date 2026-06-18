@@ -1,15 +1,15 @@
 {
   "name": "huayi-dev-plugins",
-  "description": "花易项目统一 Plugin Marketplace — GitLab 助手、试卷生成、浏览器自动化、MiMo 编程助手",
+  "description": "花易项目统一 Plugin Marketplace — Git 平台助手、试卷生成、浏览器自动化、MiMo 编程助手",
   "owner": {
     "name": "huayi",
     "url": "https://git.huayi.tech/huayi"
   },
   "plugins": [
     {
-      "name": "gitlab-dev",
-      "description": "GitLab 开发助手 — mr、review、resolve、conflict 四个专项 skill，结合 glab CLI 管理项目交付",
-      "source": "./plugins/gitlab-dev"
+      "name": "gitwork",
+      "description": "Git 平台开发助手 — deliver、review、resolve、conflict 四个专项 skill，结合 gh / glab CLI 管理 GitHub 与 GitLab 项目交付",
+      "source": "./plugins/gitwork"
     },
     {
       "name": "exam-generator",

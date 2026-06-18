@@ -26,7 +26,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 ```bash
 /plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
-/plugin install gitlab-dev
+/plugin install gitwork
 ```
 
 ## Maintenance Rules
@@ -35,4 +35,4 @@ This file provides guidance to Claude Code when working in this repository.
 2. Claude Code / Copilot CLI 和 Codex 共享 `skills/<skill>/SKILL.md`，不再使用根级 `SKILL.md`。
 3. Codex 使用 `.codex-plugin/plugin.json`（其中 `"skills": "./skills/"` 指向插件根目录下的 `skills/`）。
 4. `.claude-plugin/marketplace.json` 与 `.agents/plugins/marketplace.json` 需要分别维护各自 schema。
-5. 多 skill 插件的每个 skill 独立维护，引用共享原则文件（`references/principles.md`）而非互相复制内容。
+5. 多 skill 插件的每个 skill 独立维护，引用共享原则文件用相对 skill 自身目录的路径（`../../references/principles.md`）而非互相复制内容。

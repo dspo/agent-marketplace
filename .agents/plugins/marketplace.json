@@ -5,11 +5,11 @@
   },
   "plugins": [
     {
-      "name": "gitlab-dev",
-      "description": "GitLab 开发助手 — mr、review、resolve、conflict 四个专项 skill，结合 glab CLI 管理项目交付",
+      "name": "gitwork",
+      "description": "Git 平台开发助手 — deliver、review、resolve、conflict 四个专项 skill，结合 gh / glab CLI 管理 GitHub 与 GitLab 项目交付",
       "source": {
         "source": "local",
-        "path": "./plugins/gitlab-dev"
+        "path": "./plugins/gitwork"
       },
       "policy": {
         "installation": "AVAILABLE",
