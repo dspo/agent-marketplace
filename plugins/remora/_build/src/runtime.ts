@@ -5,6 +5,7 @@ import { loadConfig, resolveModel } from "./config.ts";
 import { COMPACTED_SUMMARY, makeTransformContext } from "./compaction.ts";
 import type { FileEdit } from "./diff.ts";
 import { makeBeforeToolCall } from "./permissions.ts";
+import { ArtifactManager, artifactsDirForSession } from "./artifacts.ts";
 import {
 	appendActiveToolsChangeEntry,
 	appendCompactionEntry,
@@ -79,7 +80,8 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 
 	const edits: FileEdit[] = [];
 	const model = resolveModel(cfg);
-	const tools = buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e) });
+	const artifacts = new ArtifactManager(artifactsDirForSession(metadata.path));
+	const tools = buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e), artifacts });
 	const agent = new Agent({
 		initialState: {
 			systemPrompt: opts.system,

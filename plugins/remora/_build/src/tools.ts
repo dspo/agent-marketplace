@@ -5,6 +5,8 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { type Static, type TSchema, Type } from "@earendil-works/pi-ai";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 
+import { type ArtifactManager, isArtifactUrl, parseArtifactUrl } from "./artifacts.ts";
+import { captureOutput } from "./capture-output.ts";
 import { type FileEdit, unifiedDiff } from "./diff.ts";
 
 const MAX_READ_BYTES = 256 * 1024;
@@ -13,12 +15,16 @@ const MAX_ENTRIES = 1000;
 const MAX_WRITE_BYTES = 1024 * 1024;
 const BASH_TIMEOUT_MS = 120_000;
 const BASH_OUTPUT_CAP = 64 * 1024;
+/** Inline cap for read_file: over this → spill full file to an artifact, keep head+tail. */
+const READ_INLINE_CAP = 64 * 1024;
 const SKIP_DIRS = new Set([".git", "node_modules", ".remora", "dist", "build", ".next", ".cache"]);
 
 /** Options controlling which tools are exposed and where edits are reported. */
 export interface ToolOptions {
 	write?: boolean;
 	onEdit?: (edit: FileEdit) => void;
+	/** Artifact sink for spilling oversized outputs; undefined disables artifact spilling (hard truncation). */
+	artifacts?: ArtifactManager;
 }
 
 /** Resolve a user-supplied path and reject anything outside the root. */
@@ -121,16 +127,32 @@ function globToRegExp(glob: string): RegExp {
 /** Build the tool set, confined to `root`. Write tools are added only when `opts.write`. */
 export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
 	const base = resolve(root);
+	const artifacts = opts.artifacts;
 
 	const read = tool({
 		name: "read_file",
 		label: "Read file",
-		description: "Read a UTF-8 text file within the workspace. Truncated at 256 KiB.",
+		description: "Read a UTF-8 text file within the workspace, or an `artifact://<id>` URL from a prior overflow. Large outputs are spilled to an artifact (head + pointer + tail).",
 		parameters: readParams,
-		run: (p) => {
+		run: async (p) => {
+			// artifact://<id> readback: recover a previously spilled full output.
+			if (isArtifactUrl(p.path)) {
+				const id = parseArtifactUrl(p.path);
+				if (!id) throw new Error(`invalid artifact URL: ${p.path}`);
+				if (!artifacts) throw new Error("artifact readback is not available in this session");
+				const body = await artifacts.read(id);
+				if (body === null) throw new Error(`artifact not found: ${p.path}`);
+				return text(body);
+			}
 			const abs = safeResolve(base, p.path);
 			const buf = readFileSync(abs);
-			const slice = buf.subarray(0, MAX_READ_BYTES).toString("utf8");
+			const content = buf.toString("utf8");
+			// Spill oversized files: keep a bounded head+tail inline, full bytes in an artifact.
+			if (artifacts && buf.byteLength > READ_INLINE_CAP) {
+				const res = await captureOutput(content, artifacts, { maxBytes: READ_INLINE_CAP, toolType: "read_file" });
+				return text(res.text);
+			}
+			const slice = content.slice(0, MAX_READ_BYTES);
 			const suffix = buf.byteLength > MAX_READ_BYTES ? "\n… [truncated at 256 KiB]" : "";
 			return text(slice + suffix);
 		},
@@ -202,7 +224,7 @@ export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
 		},
 	});
 
-	const readOnly = [read, ls, find, grep, makeBash(base)];
+	const readOnly = [read, ls, find, grep, makeBash(base, artifacts)];
 	if (!opts.write) return readOnly;
 	return [...readOnly, ...buildMutators(base, opts.onEdit)];
 }
@@ -211,24 +233,31 @@ export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
  * The `bash` tool. Always registered; the read-only/write restriction is
  * enforced by `beforeToolCall` (read-only mode allows only whitelisted commands).
  */
-function makeBash(base: string): AgentTool {
+function makeBash(base: string, artifacts?: ArtifactManager): AgentTool {
 	return tool({
 		name: "bash",
 		label: "Run shell command",
-		description: "Run a shell command from the workspace root. Combined stdout/stderr is captured (64 KiB cap).",
+		description: "Run a shell command from the workspace root. Combined stdout/stderr is captured; oversized output spills to an artifact (head + pointer + tail).",
 		parameters: bashParams,
 		executionMode: "sequential",
-		run: (p) => {
+		run: async (p) => {
 			const res = spawnSync("/bin/sh", ["-c", p.command], {
 				cwd: base,
 				timeout: BASH_TIMEOUT_MS,
-				maxBuffer: BASH_OUTPUT_CAP,
+				// Capture generously; the LLM-facing bound + spill is handled below by
+				// captureOutput (so oversized output is preserved on disk, not lost).
+				maxBuffer: 8 * 1024 * 1024,
 				encoding: "utf8",
 			});
 			if (res.error) throw new Error(`command failed to start: ${res.error.message}`);
-			const out = `${res.stdout ?? ""}${res.stderr ?? ""}`.slice(0, BASH_OUTPUT_CAP);
+			const out = `${res.stdout ?? ""}${res.stderr ?? ""}`;
 			const code = res.status ?? (res.signal ? `signal ${res.signal}` : "unknown");
-			return text(`exit ${code}\n${out || "(no output)"}`);
+			const header = `exit ${code}\n`;
+			if (artifacts && out.length > BASH_OUTPUT_CAP) {
+				const res2 = await captureOutput(out, artifacts, { maxBytes: BASH_OUTPUT_CAP, toolType: "bash" });
+				return text(`${header}${res2.text}`);
+			}
+			return text(`${header}${out.slice(0, BASH_OUTPUT_CAP) || "(no output)"}`);
 		},
 	});
 }
