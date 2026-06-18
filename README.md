@@ -14,7 +14,7 @@
 /plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
 
 # 安装插件
-/plugin install gitlab-dev
+/plugin install gitwork
 /plugin install mimo
 /plugin install exam-generator
 /plugin install playwright-cli
@@ -33,7 +33,7 @@
 copilot plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
 
 # 安装插件
-copilot plugin install gitlab-dev
+copilot plugin install gitwork
 ```
 
 ### OpenAI Codex
@@ -48,9 +48,9 @@ Codex 通过 `.agents/plugins/marketplace.json` 发现插件，并从每个插�
 ├── .claude-plugin/marketplace.json       # Claude Code + Copilot CLI 共享索引
 ├── .agents/plugins/marketplace.json      # OpenAI Codex 索引
 ├── plugins/                              # 统一插件源码
-│   ├── gitlab-dev/
+│   ├── gitwork/
 │   │   ├── .codex-plugin/plugin.json
-│   │   ├── skills/gitlab-dev/SKILL.md
+│   │   ├── skills/gitwork/SKILL.md
 │   │   ├── plugin.json
 │   │   └── SKILL.md
 │   ├── mimo/

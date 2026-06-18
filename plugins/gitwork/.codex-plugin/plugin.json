@@ -1,0 +1,37 @@
+{
+  "name": "gitwork",
+  "version": "3.0.0",
+  "description": "Git 平台开发工作流助手，用于 issue、PR/MR、pipeline、review 与 worktree 交付，支持 GitHub 与 GitLab。",
+  "author": {
+    "name": "Huayi",
+    "url": "https://git.huayi.tech/huayi"
+  },
+  "homepage": "https://git.huayi.tech/huayi/shared/agent-skills",
+  "repository": "https://git.huayi.tech/huayi/shared/agent-skills",
+  "keywords": [
+    "git",
+    "github",
+    "gitlab",
+    "pull-request",
+    "merge-request",
+    "review",
+    "pipeline"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "GitWork",
+    "shortDescription": "Ship GitHub/GitLab work through branches, worktrees, and PRs/MRs",
+    "longDescription": "Guide GitHub and GitLab issue, PR/MR, review, and pipeline tasks all the way through the actual git platform delivery workflow.",
+    "developerName": "Huayi",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "基于当前仓库处理一个 GitHub/GitLab 任务，并最终交付到 PR/MR。"
+    ],
+    "brandColor": "#FC6D26",
+    "screenshots": []
+  }
+}
