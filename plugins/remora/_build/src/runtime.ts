@@ -34,7 +34,7 @@ export interface TurnResult {
 	errorMessage: string | null;
 }
 
-/** Run a single rescue turn end-to-end and return a structured result. */
+/** Run a single task turn end-to-end and return a structured result. */
 export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnResult> {
 	const cfg = loadConfig(cwd, opts.model);
 	const history = opts.resume ? loadSession(cwd, opts.sessionId) : [];

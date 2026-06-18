@@ -11,7 +11,7 @@ import type { Model } from "@earendil-works/pi-ai";
 /**
  * Build a `transformContext` hook that compacts long histories before each LLM
  * call. Below the threshold it returns the messages untouched (zero cost — the
- * common case for a single-turn rescue). Above it, recent messages are kept and
+ * common case for a single-turn task). Above it, recent messages are kept and
  * the older middle is replaced by a generated summary. Summarization failure
  * degrades gracefully to the original messages rather than aborting the turn.
  */

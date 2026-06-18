@@ -1,7 +1,7 @@
 {
   "name": "remora",
   "version": "0.2.0",
-  "description": "自包含 rescue agent，内嵌 pi agent harness，用非 Claude 模型做交叉验证与第二意见。",
+  "description": "自包含 task agent，内嵌 pi agent harness，用非 Claude 模型做交叉验证与第二意见。",
   "author": {
     "name": "Huayi",
     "url": "https://git.huayi.tech/huayi"
@@ -9,7 +9,7 @@
   "homepage": "https://git.huayi.tech/huayi/shared/agent-marketplace",
   "repository": "https://git.huayi.tech/huayi/shared/agent-marketplace",
   "keywords": [
-    "rescue",
+    "task",
     "agent",
     "pi",
     "cross-validation"
@@ -17,7 +17,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "remora",
-    "shortDescription": "Self-contained rescue agent with a non-Claude second opinion",
+    "shortDescription": "Self-contained task agent with a non-Claude second opinion",
     "longDescription": "remora embeds the pi agent harness and runs a non-Claude model (any OpenAI-compatible endpoint) to investigate stuck problems, cross-validate, and give a genuinely different second opinion. No third-party agent CLI required — only a model endpoint.",
     "developerName": "Huayi",
     "category": "Developer Tools",
