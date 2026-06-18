@@ -37,27 +37,27 @@ function lastError(stderr: string): { type: string; message: string } | null {
 	return null;
 }
 
-describe("rescue stdin contract", () => {
+describe("task stdin contract", () => {
 	it("exits 2 on empty stdin", async () => {
-		const r = await run(["rescue"], "");
+		const r = await run(["task"], "");
 		assert.equal(r.code, 2);
 		assert.match(lastError(r.stderr)?.message ?? "", /no task on stdin/);
 	});
 
 	it("exits 2 on invalid JSON", async () => {
-		const r = await run(["rescue"], "not json");
+		const r = await run(["task"], "not json");
 		assert.equal(r.code, 2);
 		assert.match(lastError(r.stderr)?.message ?? "", /not valid JSON/);
 	});
 
 	it("exits 2 when prompt is missing", async () => {
-		const r = await run(["rescue"], JSON.stringify({ files: ["x"] }));
+		const r = await run(["task"], JSON.stringify({ files: ["x"] }));
 		assert.equal(r.code, 2);
 		assert.match(lastError(r.stderr)?.message ?? "", /'prompt'/);
 	});
 
 	it("exits 2 when prompt is not a string", async () => {
-		const r = await run(["rescue"], JSON.stringify({ prompt: 123 }));
+		const r = await run(["task"], JSON.stringify({ prompt: 123 }));
 		assert.equal(r.code, 2);
 		assert.match(lastError(r.stderr)?.message ?? "", /'prompt'/);
 	});
