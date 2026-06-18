@@ -22,9 +22,9 @@ export interface CaptureResult {
 export interface CaptureOptions {
 	/** Byte cap for the inline (LLM-facing) output. Over this → spill. */
 	maxBytes: number;
-	/** Approx head/tail char budget for the truncated inline view. */
-	headChars?: number;
-	tailChars?: number;
+	/** Line budget for the head/tail of the truncated inline view (named after the rough char window). */
+	headLines?: number;
+	tailLines?: number;
 	/** Tool name used for the artifact filename (`${id}.${tool}.log`). */
 	toolType: string;
 }
@@ -39,14 +39,21 @@ function utf8Bytes(s: string): number {
 /**
  * Return the bounded view (head + notice + tail) for an over-cap output,
  * referencing the artifact id so the LLM knows where the full text lives.
+ *
+ * `headChars`/`tailChars` are line budgets (named for the rough char window
+ * they trace to). When the line count is small enough that head and tail would
+ * overlap, we fall back to a single head slice so the middle is never doubled.
  */
 function truncatedView(text: string, opts: CaptureOptions, artifactId: string, totalBytes: number): string {
-	const headChars = opts.headChars ?? 4000;
-	const tailChars = opts.tailChars ?? 4000;
+	const headLines = opts.headLines ?? 4000;
+	const tailLines = opts.tailLines ?? 4000;
 	const lines = text.split("\n");
 	const totalLines = lines.length;
-	const head = lines.slice(0, Math.min(headChars, totalLines)).join("\n");
-	const tail = lines.slice(Math.max(0, totalLines - tailChars)).join("\n");
+	// If head and tail would overlap, just take the head — avoids rendering the
+	// middle twice. (We're still spilling the full bytes to the artifact.)
+	const head = lines.slice(0, Math.min(headLines, totalLines)).join("\n");
+	const overlap = totalLines <= headLines + tailLines;
+	const tail = overlap ? "" : `\n${lines.slice(Math.max(0, totalLines - tailLines)).join("\n")}`;
 	const kb = Math.max(1, Math.round(totalBytes / 1024));
 	const notice = `\n\n[… ${totalLines} lines / ~${kb} KiB truncated — full output saved to artifact://${artifactId} …]\n\n`;
 	return `${head}${notice}${tail}`;

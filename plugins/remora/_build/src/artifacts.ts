@@ -29,6 +29,13 @@ export class ArtifactManager {
 	private readonly dir: string;
 	private dirCreated = false;
 	private initialized = false;
+	/**
+	 * Initialization in-flight promise. `read_file` runs in parallel (pi's agent
+	 * loop uses Promise.all over a message's tool calls), so multiple callers can
+	 * hit `ensureDir` concurrently before the first finishes — without this guard
+	 * they'd each scan existing ids from the same fs state and collide on nextId.
+	 */
+	private initPromise: Promise<void> | null = null;
 
 	/** @param dir Directory holding artifact files. Created lazily on first save. */
 	constructor(dir: string) {
@@ -39,15 +46,21 @@ export class ArtifactManager {
 		return this.dir;
 	}
 
-	private async ensureDir(): Promise<void> {
-		if (!this.dirCreated) {
-			await mkdir(this.dir, { recursive: true });
-			this.dirCreated = true;
+	/** Ensure the dir exists and nextId is scanned exactly once, even under concurrency. */
+	private ensureDir(): Promise<void> {
+		if (!this.initPromise) {
+			this.initPromise = (async () => {
+				if (!this.dirCreated) {
+					await mkdir(this.dir, { recursive: true });
+					this.dirCreated = true;
+				}
+				if (!this.initialized) {
+					await this.scanExistingIds();
+					this.initialized = true;
+				}
+			})();
 		}
-		if (!this.initialized) {
-			await this.scanExistingIds();
-			this.initialized = true;
-		}
+		return this.initPromise;
 	}
 
 	/** Scan existing `{id}.{tool}.log` files so a resumed session continues numbering. */
@@ -108,7 +121,10 @@ export class ArtifactManager {
 
 /** Derive the artifact directory from a session JSONL path (strip `.jsonl`). */
 export function artifactsDirForSession(sessionPath: string): string {
-	return sessionPath.replace(/\.jsonl$/i, "");
+	// Defensive: if the path doesn't end in .jsonl (a cross-module implicit contract),
+	// don't mkdir a dir named like the session file itself (ENOTDIR). Append a suffix.
+	if (/\.jsonl$/i.test(sessionPath)) return sessionPath.replace(/\.jsonl$/i, "");
+	return `${sessionPath}.artifacts`;
 }
 
 /** True for an `artifact://<id>` URL string. */

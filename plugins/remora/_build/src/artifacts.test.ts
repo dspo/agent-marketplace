@@ -11,9 +11,9 @@ function tmpDir(): string {
 	return mkdtempSync(join(tmpdir(), "remora-art-"));
 }
 
-test("artifactsDirForSession strips .jsonl", () => {
+test("artifactsDirForSession strips .jsonl, falls back for non-jsonl", () => {
 	assert.equal(artifactsDirForSession("/x/y/sess.jsonl"), "/x/y/sess");
-	assert.equal(artifactsDirForSession("/x/y/sess"), "/x/y/sess");
+	assert.equal(artifactsDirForSession("/x/y/sess"), "/x/y/sess.artifacts");
 });
 
 test("artifact URL helpers", () => {
@@ -61,7 +61,7 @@ test("captureOutput spills large output with head + pointer + tail", async () =>
 	const head = "HEAD_LINE\n".repeat(5);
 	const tail = "TAIL_LINE\n".repeat(5);
 	const huge = `${head}${"x".repeat(DEFAULT_OUTPUT_CAP_BYTES)}\n${tail}`;
-	const res = await captureOutput(huge, am, { maxBytes: 1024, toolType: "bash", headChars: 2, tailChars: 2 });
+	const res = await captureOutput(huge, am, { maxBytes: 1024, toolType: "bash", headLines: 2, tailLines: 2 });
 	assert.equal(res.truncated, true);
 	assert.ok(res.artifactId);
 	assert.match(res.text, /HEAD_LINE/);
@@ -69,4 +69,29 @@ test("captureOutput spills large output with head + pointer + tail", async () =>
 	assert.match(res.text, /artifact:\/\//);
 	// Full output preserved on disk, recoverable via the artifact id.
 	assert.equal(await am.read(res.artifactId!), huge);
+});
+
+test("captureOutput head/tail do not overlap for small line counts", async () => {
+	const dir = tmpDir();
+	const am = new ArtifactManager(dir);
+	// Many bytes, few lines — head and tail budgets would overlap. The view must
+	// not duplicate the middle: it takes head only (no tail) in this regime.
+	const body = `onlyline\n`;
+	const huge = `${"x".repeat(DEFAULT_OUTPUT_CAP_BYTES)}${body}`;
+	const res = await captureOutput(huge, am, { maxBytes: 1024, toolType: "read_file", headLines: 4000, tailLines: 4000 });
+	assert.equal(res.truncated, true);
+	// "onlyline" appears exactly once (no doubled middle).
+	const occurrences = (res.text.match(/onlyline/g) ?? []).length;
+	assert.equal(occurrences, 1);
+});
+
+test("ArtifactManager init is concurrency-safe (nextId never collides)", async () => {
+	const dir = tmpDir();
+	const am = new ArtifactManager(dir);
+	// Fire many concurrent saves before the first ensureDir resolves — all must
+	// get distinct ids (no double-init, no scan-collision).
+	const ids = await Promise.all(Array.from({ length: 20 }, () => am.save("x", "bash")));
+	assert.equal(new Set(ids).size, 20, "all ids distinct");
+	// Ids are 0..19 (scan found nothing), just numeric sort not lexicographic.
+	assert.deepEqual([...ids].map(Number).sort((a, b) => a - b), Array.from({ length: 20 }, (_, i) => i));
 });

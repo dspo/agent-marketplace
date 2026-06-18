@@ -249,15 +249,22 @@ function makeBash(base: string, artifacts?: ArtifactManager): AgentTool {
 				maxBuffer: 8 * 1024 * 1024,
 				encoding: "utf8",
 			});
-			if (res.error) throw new Error(`command failed to start: ${res.error.message}`);
+			// Distinguish "process never started" (genuinely fatal) from "stdout exceeded
+			// maxBuffer" — the latter still yields partial output in res.stdout/res.stderr,
+			// which captureOutput can spill. Throwing would fail the whole tool call.
+			const maxBufferHit = res.error?.message?.includes("maxBuffer");
+			if (res.error && !maxBufferHit) throw new Error(`command failed to start: ${res.error.message}`);
 			const out = `${res.stdout ?? ""}${res.stderr ?? ""}`;
-			const code = res.status ?? (res.signal ? `signal ${res.signal}` : "unknown");
-			const header = `exit ${code}\n`;
+			const code = res.status ?? (res.signal ? `signal ${res.signal}` : maxBufferHit ? "unknown (maxBuffer)" : "unknown");
+			const capNote = maxBufferHit ? " [output exceeded capture cap — further tail lost]" : "";
+			const header = `exit ${code}${capNote}\n`;
 			if (artifacts && out.length > BASH_OUTPUT_CAP) {
 				const res2 = await captureOutput(out, artifacts, { maxBytes: BASH_OUTPUT_CAP, toolType: "bash" });
 				return text(`${header}${res2.text}`);
 			}
-			return text(`${header}${out.slice(0, BASH_OUTPUT_CAP) || "(no output)"}`);
+			const sliced = out.slice(0, BASH_OUTPUT_CAP);
+			const suffix = out.length > BASH_OUTPUT_CAP ? "\n… [truncated at 64 KiB — no artifact sink in this session]" : "";
+			return text(`${header}${sliced || "(no output)"}${suffix}`);
 		},
 	});
 }
