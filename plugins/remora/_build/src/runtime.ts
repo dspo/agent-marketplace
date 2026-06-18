@@ -1,11 +1,22 @@
-import { Agent } from "@earendil-works/pi-agent-core";
-import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
+import { type AgentMessage, Agent } from "@earendil-works/pi-agent-core";
+import type { AgentEvent } from "@earendil-works/pi-agent-core";
 
 import { loadConfig, resolveModel } from "./config.ts";
-import { makeTransformContext } from "./compaction.ts";
+import { COMPACTED_SUMMARY, makeTransformContext } from "./compaction.ts";
 import type { FileEdit } from "./diff.ts";
 import { makeBeforeToolCall } from "./permissions.ts";
-import { loadSession, saveSession } from "./session.ts";
+import { ArtifactManager, artifactsDirForSession } from "./artifacts.ts";
+import {
+	appendActiveToolsChangeEntry,
+	appendCompactionEntry,
+	appendLineageEntry,
+	appendMessageEntry,
+	appendModelChangeEntry,
+	appendTitleEntry,
+	loadMessagesWithEntryIds,
+	openOrCreateSession,
+	type ResumeMode,
+} from "./session.ts";
 import { buildTools } from "./tools.ts";
 
 export interface RunTurnOptions {
@@ -13,8 +24,8 @@ export interface RunTurnOptions {
 	system: string;
 	write?: boolean;
 	model?: string;
-	sessionId: string;
-	resume?: boolean;
+	resumeMode: ResumeMode;
+	resumeId?: string;
 	onProgress: (event: ProgressEvent) => void;
 }
 
@@ -23,33 +34,86 @@ export interface ProgressEvent {
 	type: string;
 	tool?: string;
 	detail?: string;
+	id?: string;
+	path?: string;
 }
 
 export interface TurnResult {
 	status: number;
+	sessionId: string;
+	sessionPath: string;
 	finalMessage: string;
 	touchedFiles: string[];
 	edits: FileEdit[];
-	droppedMessages: number;
 	errorMessage: string | null;
 }
 
 /** Run a single task turn end-to-end and return a structured result. */
 export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnResult> {
 	const cfg = loadConfig(cwd, opts.model);
-	const history = opts.resume ? loadSession(cwd, opts.sessionId) : [];
+
+	const { session, metadata, isNew } = await openOrCreateSession(cwd, opts.resumeMode, opts.resumeId);
+	opts.onProgress({ type: "session", id: metadata.id, path: metadata.path });
+
+	const { messages: history, entryIdByMessage } = isNew
+		? { messages: [] as AgentMessage[], entryIdByMessage: new WeakMap<object, string>() }
+		: await loadMessagesWithEntryIds(session);
+
+	// Idempotent persistence tracker: by message reference, so a compacted
+	// history never re-appends already-persisted messages and originals are
+	// captured exactly once (the compaction callback persists the summarized
+	// tail before it is discarded from state.messages). Message objects keep
+	// their reference even when pi appends streaming content blocks in place —
+	// in-place mutation does not change identity, so the WeakSet stays valid.
+	const persisted = new WeakSet<object>();
+	for (const m of history) persisted.add(m);
+
+	async function flush(messages: AgentMessage[]): Promise<void> {
+		for (const m of messages) {
+			if (persisted.has(m)) continue;
+			// The synthetic compaction-summary message is represented on resume by
+			// the `compaction` entry, not a `message` entry — skip it.
+			if (isCompactedSummary(m)) {
+				persisted.add(m);
+				continue;
+			}
+			await appendMessageEntry(session, m);
+			persisted.add(m);
+		}
+	}
 
 	const edits: FileEdit[] = [];
 	const model = resolveModel(cfg);
+	const artifacts = new ArtifactManager(artifactsDirForSession(metadata.path));
+	const tools = buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e), artifacts });
 	const agent = new Agent({
 		initialState: {
 			systemPrompt: opts.system,
 			model,
-			tools: buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e) }),
+			tools,
 			messages: history,
 		},
 		beforeToolCall: makeBeforeToolCall(Boolean(opts.write), cwd),
-		transformContext: makeTransformContext(model, cfg.apiKey, (note) => opts.onProgress({ type: "compaction", detail: note })),
+		transformContext: makeTransformContext(
+			model,
+			cfg.apiKey,
+			(note) => opts.onProgress({ type: "compaction", detail: note }),
+			async (info) => {
+				await flush(info.summarized);
+				// Record an exact cut point so resume slices the history to
+				// [summary, ...recent] instead of reloading the summarized originals
+				// (which would inflate the context past the window on resume).
+				await appendCompactionEntry(session, {
+					summary: info.summary,
+					firstKeptEntryId: info.firstKeptEntryId,
+					tokensBefore: info.tokensBefore,
+				});
+			},
+			// Resolve a kept history message → its persisted entry id (from the
+			// load-time map). Brand-new-this-turn messages have no id yet and fall
+			// back to "", which loadMessages treats as "cut at session start".
+			(m) => entryIdByMessage.get(m as object),
+		),
 		getApiKey: async () => cfg.apiKey,
 	});
 
@@ -58,23 +122,37 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 		if (progress) opts.onProgress(progress);
 	});
 
-	if (opts.resume && history.length > 0) {
+	if (isNew) {
+		await appendLineageEntry(session);
+		await appendModelChangeEntry(session, cfg.provider, cfg.model);
+		await appendActiveToolsChangeEntry(session, tools.map((t) => t.name));
+		await appendTitleEntry(session, opts.prompt);
+	}
+
+	if (!isNew && history.length > 0) {
 		agent.state.messages = [...history, { role: "user", content: opts.prompt, timestamp: 0 }];
 		await agent.continue();
 	} else {
 		await agent.prompt(opts.prompt);
 	}
 
-	const dropped = saveSession(cwd, opts.sessionId, agent.state.messages);
+	await flush(agent.state.messages);
+
 	const error = agent.state.errorMessage ?? null;
 	return {
 		status: error ? 1 : 0,
+		sessionId: metadata.id,
+		sessionPath: metadata.path,
 		finalMessage: extractFinalText(agent.state.messages),
 		touchedFiles: [...new Set(edits.map((e) => e.path))],
 		edits,
-		droppedMessages: dropped,
 		errorMessage: error,
 	};
+}
+
+/** True for the synthetic message emitted by `transformContext` after a compaction. */
+function isCompactedSummary(message: AgentMessage): boolean {
+	return (message as unknown as Record<symbol, unknown>)[COMPACTED_SUMMARY] === true;
 }
 
 /** Map a pi AgentEvent to a compact progress event, or null to suppress noise. */

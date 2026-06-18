@@ -8,17 +8,45 @@ import {
 } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 
+/** Marker set on the synthetic summary message so it isn't double-persisted as a `message` entry. */
+export const COMPACTED_SUMMARY = Symbol("remora:compactedSummary");
+
+/** A compaction event handed to the caller before the summarized messages are discarded. */
+export interface CompactInfo {
+	summary: string;
+	tokensBefore: number;
+	/** Index in the (pre-compaction) messages array of the first kept message. */
+	keepFromIndex: number;
+	/** The original messages being summarized (the caller persists these as `message` entries). */
+	summarized: AgentMessage[];
+	/**
+	 * Entry id of the first kept message, so the `compaction` entry can record an
+	 * exact cut point for resume (matches pi's `firstKeptEntryId`). Resolved via
+	 * {@link makeTransformContext}'s `entryIdOf`; empty when the kept message isn't
+	 * a persisted history message (rare: only brand-new-this-turn messages kept).
+	 */
+	firstKeptEntryId: string;
+}
+
 /**
  * Build a `transformContext` hook that compacts long histories before each LLM
  * call. Below the threshold it returns the messages untouched (zero cost — the
  * common case for a single-turn task). Above it, recent messages are kept and
  * the older middle is replaced by a generated summary. Summarization failure
  * degrades gracefully to the original messages rather than aborting the turn.
+ *
+ * When compaction actually fires, `onCompact` is awaited with the originals
+ * BEFORE they are discarded, so the caller can persist them + record a
+ * `compaction` entry. The synthetic summary message carries {@link
+ * COMPACTED_SUMMARY} so the caller skips re-persisting it (the compaction entry
+ * stands in for it on resume).
  */
 export function makeTransformContext(
 	model: Model<"openai-completions">,
 	apiKey: string,
 	onNotice?: (note: string) => void,
+	onCompact?: (info: CompactInfo) => Promise<void> | void,
+	entryIdOf?: (message: AgentMessage) => string | undefined,
 ): (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]> {
 	const settings = DEFAULT_COMPACTION_SETTINGS;
 
@@ -43,11 +71,32 @@ export function makeTransformContext(
 			return messages;
 		}
 
+		// Resolve the cut-point entry id from the first kept message. This lets the
+		// `compaction` entry record an exact `firstKeptEntryId` so resume slices
+		// correctly (keeping the recent tail rather than reloading the originals).
+		const firstKeptEntryId = entryIdOf?.(messages[keepFrom]) ?? "";
+
+		// Persist the originals + emit the audit event before discarding them.
+		if (onCompact) {
+			await onCompact({
+				summary: result.value,
+				tokensBefore: estimate.tokens,
+				keepFromIndex: keepFrom,
+				summarized: toSummarize,
+				firstKeptEntryId,
+			});
+		}
+
 		onNotice?.(`compacted ${toSummarize.length} messages (~${estimate.tokens} ctx tokens)`);
-		const summaryMessage: AgentMessage = {
-			role: "user",
+		// Synthetic message standing in for the summarized history. `timestamp: 0`
+		// flags it as non-real (it was never produced at a wall-clock instant); it
+		// also carries the COMPACTED_SUMMARY marker so runtime skips persisting it
+		// as a `message` entry — the `compaction` entry stands in for it on resume.
+		const summaryMessage = {
+			role: "user" as const,
 			content: `[Earlier conversation summarized]\n\n${result.value}`,
 			timestamp: 0,
+			[COMPACTED_SUMMARY]: true,
 		};
 		return [summaryMessage, ...recent];
 	};
