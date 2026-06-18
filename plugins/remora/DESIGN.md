@@ -344,6 +344,7 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 4. **"无第三方"是相对的**。去掉了用户手装的 CLI binary，但引入 pi 库依赖 + 一个 model API。门槛大幅降低（装插件即可），但依赖未归零。
 5. **弱模型表现**。非 Claude 模型若较弱，工具调用/编辑命中率可能差。**缓解**：借鉴 oh-my-pi 的 benchmaxxed read/edit 提示思路自写。
 6. **安全面**。`bash` 在 write 模式放行任意命令；read-only 靠白名单收口（无法判定即 block），文件操作限制在 workspace root 内。**pi 本身不内置权限沙箱**，`beforeToolCall` 是唯一软门，强隔离需靠容器。
+7. **大输出数据丢失（已修复）**。历史上 `bash` 输出 > 64 KiB、`read` 大文件直接硬截断丢数据。**已对齐 oh-my-pi 修复**：见 §5.5/`artifacts.ts`/`capture-output.ts`——超过阈值的完整输出外化到 session 同级目录的 artifact 文件（`<sessionDir>/<id>.<tool>.log`），LLM-facing 只保留 head + pointer(`artifact://<id>`) + tail，`read_file` 支持 `artifact://<id>` 回读。零数据丢失。
 
 ## 9. 落地路径
 
@@ -367,3 +368,15 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 - [x] **session 存储 = pi `JsonlSessionRepo` + Claude Code 风格**：复用上游 pi 自带的 JSONL session 体系（零新增依赖），集中存放于 `~/.remora/projects/<encoded-cwd>/<ts>_<id>.jsonl`；resume 用 `--continue`/`--resume <id>`（废弃 `--session`/`default` id），session-id 用 UUIDv4；entry 做到标准档（message/model_change/session_info/compaction）；用 `remora:lineage` custom entry 记录派生自宿主 CC 的 `CLAUDE_CODE_SESSION_ID`。旧的扁平 JSON + 2MB 丢消息方案废弃。
 
 > **依赖纪律已定**：只通过 npm 规范依赖上游发布包，不 vendor、不抄袭；底座先用上游 pi，oh-my-pi 留待后续按需引入其独立 npm 子包。
+
+## 11. 扩展 seam（留口子，对齐 oh-my-pi 的能力面，现在不实现）
+
+remora 的目标是 pi 系完整 coding agent，但当前形态短命、无 daemon。以下能力**对齐到 seam、不实现**——能力已在 pi/oh-my-pi 里存在但因 bun/Rust 重耦合无法移植；seam 在，未来 remora 获得 vision input / cloud 后端 / 多设备时一个适配 drop-in。
+
+1. **存储后端 seam = 上游 `SessionRepo` 接口**（不另造接口）。pi 已导出 `SessionRepo<TMetadata, TCreateOptions, TListOptions>`（`create`/`open`/`list`/`delete`/`fork`），`JsonlSessionRepo` 与 `InMemorySessionRepo` 都实现它。remora 当前用 `JsonlSessionRepo`（JSONL-via-NodeExecutionEnv）。未来 cloud/multi-device 时一个实现 `SessionRepo` 的 ioredis/pg 适配器即可 drop-in，**无需** remora 自己再定义 `SessionStorageBackend` 平行接口（那是 oh-my-pi 在 bun:sqlite 之上的抽象，与 pi 重复）。oh-my-pi 的 `agent-storage`(bun:sqlite) / `history-storage`(FTS5) / `snapcompact`(Rust) 是它的分叉，无 Node 等价且 remora 短命 CLI 无此需求。
+2. **视觉压缩 seam = `transformContext` 钩子**。remora 的 `compaction.ts` 已通过 pi 的 `transformContext` 接入文本压缩（`makeTransformContext`，见 `runtime.ts`）。未来 remora 支持 image/vision input 后，文本→token 的视觉压缩（oh-my-pi 的 `snapcompact`，依赖 Rust `countTokens` + 文本→PNG 渲染）走**同一钩子**——`transformContext` 是 pi 的官方 context 变换点，视觉压缩是一个额外的 transform provider。现在无 vision input，seam 形态即文本 compaction（已落地）。
+3. **terminal breadcrumb（低优先）**。`--continue` 在 TTY 场景下需要找"当前终端的上次 session"——oh-my-pi 用 `@oh-my-pi/pi-tui` 的 `getTerminalId`。remora 的调用方是 Claude Code（不是人 TTY），主 agent 已持 sessionId 并经 `--resume <id>` 显式续接，故**不需要** breadcrumb。未来若 remora 直接面向人 TTY，用 `process.stdout` 的 tty id 或 CC 注入的 id 替代。
+4. **lineage / 派生数据 = `custom` entry**。`remora:lineage` 是 remora 用 pi 的 `appendCustomEntry`（扩展私有数据官方逃生口）记 CC session id 的首例。future ttsr / mcp / mode 切换走同条路（pi 不解释 remora 的 custom entry，只原样落盘）。
+
+> **不做清单**（诚实记录理由）：mimo 的 SQLite + drizzle + 30 迁移（常驻 coding-agent 的数据库思维，remora 短命 CLI 用 JSONL-via-pi 是对的）；`agent-session.ts` 的 11.7k 编排（remora 有自己的薄 `runtime.ts`，Rust countTokens/MacOSPowerAssertion 无 Node 等价且 macOS-only native 不该进跨平台 CLI）；FTS5 全文检索历史 prompt（remora 不搜 session，真要搜时上 better-sqlite3 单独建，不进 session 层）。
+
