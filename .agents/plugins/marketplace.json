@@ -1,7 +1,7 @@
 {
   "name": "remora-plugins",
   "interface": {
-    "displayName": "remora Plugins"
+    "displayName": "Remora Plugins"
   },
   "plugins": [
     {
