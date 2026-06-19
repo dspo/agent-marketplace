@@ -25,7 +25,7 @@ This repository is a unified **Plugin Marketplace** for AI coding assistants, co
 ## Installation
 
 ```bash
-/plugin marketplace add https://<user>:<token>@<git-host>/<org>/agent-marketplace.git
+/plugin marketplace add https://<git-host>/<org>/agent-marketplace.git
 /plugin install gitwork
 ```
 
