@@ -1,52 +1,52 @@
 ---
 name: mimo
-description: MiMo Programming Assistant — code review, task delegation, and stop-gate review using MiMo
+description: MiMo 编程助手 — 使用 MiMo 进行代码审查、委托任务和 stop-gate 审查
 ---
 
 # MiMo Companion
 
-Use MiMo (Xiaomi AI Programming Assistant) for code review or task delegation from Claude Code.
+使用 MiMo（小米 AI 编程助手）进行代码审查或委托任务。
 
-## Prerequisites
+## 前置条件
 
-- Install MiMo CLI: `npm install -g @mimo-ai/cli`
-- Run `/mimo:setup` to check environment readiness
+- 安装 MiMo CLI: `npm install -g @mimo-ai/cli`
+- 运行 `/mimo:setup` 检查环境就绪状态
 
-## Commands
+## 命令
 
-| Command | Description |
-|---------|-------------|
-| `/mimo:setup` | Check MiMo availability, optionally enable stop-time review gate |
-| `/mimo:review` | Structured code review on working tree or branch diff |
-| `/mimo:adversarial-review` | Adversarial review, questioning design choices and assumptions |
-| `/mimo:rescue` | Delegate investigation or implementation to MiMo (via subagent) |
-| `/mimo:status` | Show active and recent MiMo tasks |
-| `/mimo:result` | Show stored output of completed tasks |
-| `/mimo:cancel` | Cancel active background tasks |
+| 命令 | 说明 |
+|------|------|
+| `/mimo:setup` | 检查 MiMo 可用性，可选启用 stop-time review gate |
+| `/mimo:review` | 对工作树或分支 diff 进行结构化代码审查 |
+| `/mimo:adversarial-review` | 对抗性审查，质疑设计选择和假设 |
+| `/mimo:rescue` | 委托调查或实现任务给 MiMo（通过 subagent） |
+| `/mimo:status` | 显示活跃和最近的 MiMo 任务 |
+| `/mimo:result` | 显示已完成任务的存储输出 |
+| `/mimo:cancel` | 取消活跃的后台任务 |
 
-## Architecture
+## 架构
 
-- **Server Lifecycle**: The first command starts `mimo serve` HTTP server in background, parses the port and records it in workspace state directory's `server.json`. Subsequent commands reuse the same server (confirmed via health check). The SessionEnd hook closes the server when the last referencing session ends.
-- **MiMo Client**: Communicates via REST API using `fetch`. Each request carries `x-mimocode-directory` header to bind the correct project. Structured review output uses `format: {type: "json_schema"}` and `info.structured` return.
-- **Unattended Security**: Sessions created by the plugin always carry explicit permission rules (review is read-only, `--write` tasks are allow-all) and never fall back to "ask". The client also listens to `/event` stream and automatically rejects any `question.asked` / `permission.asked` that would suspend an unattended task.
-- **Task Management**: `state.json` plus per-job JSON/log files. Background tasks run in detached `task-worker` processes. `--resume-last` reuses the persisted MiMo session ID.
-- **Stop-gate Review**: Optional Stop-hook review. Any failure path in the gate itself (MiMo missing, server down, timeout, crash) fails-open, ensuring it never blocks the Claude session.
+- **服务器生命周期**：第一个命令在后台启动 `mimo serve` HTTP 服务器，解析端口并记录在 workspace 状态目录的 `server.json` 中。后续命令复用同一服务器（通过健康检查确认）。SessionEnd hook 在最后一个引用会话结束时关闭服务器。
+- **MiMo 客户端**：通过 REST API 使用 `fetch` 通信。每个请求携带 `x-mimocode-directory` header 以绑定正确的项目。结构化审查输出使用 `format: {type: "json_schema"}` 和 `info.structured` 返回。
+- **无人值守安全**：插件创建的会话始终携带显式权限规则（审查为只读，`--write` 任务为 allow-all），不会回退到 "ask"。客户端还监听 `/event` 流并自动拒绝任何会挂起无人值守任务的 `question.asked` / `permission.asked`。
+- **任务管理**：`state.json` 加 per-job JSON/log 文件。后台任务在 detached `task-worker` 进程中运行。`--resume-last` 复用持久化的 MiMo session ID。
+- **Stop-gate 审查**：可选的 Stop-hook 审查。gate 自身的任何故障路径（MiMo 缺失、服务器宕机、超时、崩溃）都 fail-open，确保不会阻塞会话。
 
-## Environment Variables
+## 环境变量
 
-| Variable | Purpose |
-|----------|---------|
-| `MIMO_COMPANION_BIN` | Override `mimo` binary path |
-| `MIMOCODE_SERVER_PASSWORD` | If set, client sends matching Basic Auth to started server |
-| `MIMO_COMPANION_SESSION_ID` | Auto-set by SessionStart hook |
+| 变量 | 用途 |
+|------|------|
+| `MIMO_COMPANION_BIN` | 覆盖 `mimo` 二进制路径 |
+| `MIMOCODE_SERVER_PASSWORD` | 如设置，客户端发送匹配的 Basic Auth 到启动的服务器 |
+| `MIMO_COMPANION_SESSION_ID` | 由 SessionStart hook 自动设置 |
 
-> ⚠️ Background tasks (`--background`) started in detached worker processes use environment variables from the parent process startup. If API keys or other env vars change mid-session, the worker won't perceive the changes — restart Claude Code session is needed.
+> ⚠️ 后台任务（`--background`）启动的 detached worker 使用父进程启动时的环境变量。如果中途修改了 API key 等环境变量，worker 不会感知变更——需重启会话。
 
-## Build
+## 构建
 
-The `_build/` directory contains TypeScript source code, build configuration, and test files. The underscore prefix indicates this is a developer tool area and does not belong to plugin runtime distribution — when users install the plugin, only `scripts/*.mjs`, `commands/`, `prompts/` etc. are needed. `_build/` is only used when modifying source code.
+`_build/` 目录存放 TypeScript 源码、构建配置和测试文件。下划线前缀表示这是开发者工具区，不属于插件运行时分发内容——用户安装插件后只需 `scripts/*.mjs`、`commands/`、`prompts/` 等文件，`_build/` 仅在修改源码时使用。
 
-To modify plugin scripts:
+如需修改插件脚本：
 
 ```bash
 cd plugins/mimo/_build
@@ -55,4 +55,4 @@ npm run build     # esbuild → ../scripts/*.mjs
 npm test          # node --test against a fake in-process MiMo HTTP server
 ```
 
-Compiled output `scripts/*.mjs` is already committed to the repository. The plugin distributes as-is from this repository.
+编译产物 `scripts/*.mjs` 已提交到仓库，插件以原样从本仓库分发。

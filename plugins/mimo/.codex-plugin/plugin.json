@@ -17,7 +17,7 @@
   "interface": {
     "displayName": "mimo",
     "shortDescription": "MiMo companion for code review and task delegation",
-    "longDescription": "Use MiMo from Claude Code for structured code review, adversarial review, and task delegation. MiMo is a Chinese AI programming assistant by Xiaomi.",
+    "longDescription": "Use MiMo for structured code review, adversarial review, and task delegation. MiMo is a Chinese AI programming assistant by Xiaomi.",
     "developerName": "Agent Skills",
     "category": "Developer Tools",
     "capabilities": [
