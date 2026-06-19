@@ -1,5 +1,5 @@
 {
-  "name": "dspo-plugins",
+  "name": "remora-plugins",
   "interface": {
     "displayName": "Agent Skills"
   },
