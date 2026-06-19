@@ -10,9 +10,7 @@ Plugins are distributed as git repositories — users register a marketplace by 
 
 ```bash
 # Register the marketplace
-# For private repositories use HTTPS + credentials: https://<user>:<token>@<git-host>/<org>/agent-marketplace.git
-# For public repositories: https://<git-host>/<org>/agent-marketplace.git
-/plugin marketplace add https://<git-host>/<org>/agent-marketplace.git
+/plugin marketplace add https://github.com/dspo/agent-marketplace.git
 
 # Install plugins
 /plugin install gitwork
@@ -30,7 +28,7 @@ Once registered, Claude Code caches the repository automatically. Subsequent `/p
 
 ```bash
 # Register the marketplace (shares .claude-plugin/ index)
-copilot plugin marketplace add https://<user>:<token>@<your-git-host>/<org>/agent-marketplace.git
+copilot plugin marketplace add https://github.com/dspo/agent-marketplace.git
 
 # Install plugins
 copilot plugin install gitwork
