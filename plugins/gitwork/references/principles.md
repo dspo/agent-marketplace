@@ -1,70 +1,70 @@
-# Git 平台开发共享原则
+# Git Platform Development Shared Principles
 
-所有 gitwork sub-skill 都遵循以下原则。当本文件与具体 skill 文档冲突时，以具体 skill 文档为准。
+All gitwork sub-skills follow these principles. When this file conflicts with a specific skill document, the specific skill document takes precedence.
 
-## 基本原则
+## Core Principles
 
-1. 围绕 git 平台的工作最终要交付到对应平台的对象上，通常是 **PR/MR 链接** 或 **已更新的 PR/MR 链接**。
-2. 优先复用已有 branch、worktree、PR/MR，不重复造资产。
-3. 操作平台对象时优先用对应平台的官方 CLI（见下文）；只有 CLI 不支持时才回退到 REST API 或 Web 界面。
-4. 完成实现后要主动提交、推送，并创建或更新 PR/MR。
-5. 如果被认证、权限、远端配置或工具能力阻塞，要明确说清阻塞点。
+1. Git platform work must ultimately deliver to a platform object — usually a **PR/MR link** or an **updated PR/MR link**.
+2. Reuse existing branches, worktrees, and PR/MRs whenever possible; do not duplicate assets.
+3. When operating on platform objects, prefer the official CLI for that platform (see below); fall back to REST API or web UI only when CLI does not support the operation.
+4. After completing implementation, proactively commit, push, and create or update the PR/MR.
+5. If blocked by authentication, permissions, remote configuration, or tool limitations, clearly state the blocking point.
 
-## 平台探测（先确定平台与术语）
+## Platform Detection (Determine Platform and Terminology First)
 
-在动手之前，根据 git 远端确定当前仓库属于哪个平台，从而选择正确的 CLI、对象名称和字段名。
+Before starting, determine which platform the current repository belongs to based on the git remote, then select the correct CLI, object names, and field names.
 
 ```bash
-# 查看远端地址
+# View remote URL
 git remote -v
 ```
 
-判断规则：
+Detection rules:
 
-| 远端特征 | 平台 | CLI | 交付对象 | 分支字段 |
-|----------|------|-----|----------|----------|
-| `github.com` / GitHub 企业实例 | GitHub | `gh` | PR（Pull Request） | base / head |
-| `gitlab.com` / 自建 GitLab（如 `git.huayi.tech`） | GitLab | `glab` | MR（Merge Request） | target-branch / source-branch |
-| `gitee.com` / 其他 | 其他 | 平台对应 CLI / API | PR 或 MR | 按平台 |
+| Remote characteristic | Platform | CLI | Delivery object | Branch fields |
+|-----------------------|----------|-----|-----------------|---------------|
+| `github.com` / GitHub Enterprise instance | GitHub | `gh` | PR (Pull Request) | base / head |
+| `gitlab.com` / self-hosted GitLab | GitLab | `glab` | MR (Merge Request) | target-branch / source-branch |
+| `gitee.com` / others | Other | Platform CLI / API | PR or MR | Per platform |
 
-约定：后文中以 **PR/MR** 表示当前平台的交付对象，**`<default-branch>`** 表示默认分支（如 `master`/`main`）。
-每个 skill 的示例命令按平台分两组给出；执行时只取与当前平台对应的一组。
+Convention: **PR/MR** denotes the delivery object for the current platform; **`<default-branch>`** denotes the default branch (e.g., `master`/`main`).
+Each skill's example commands are grouped by platform — execute only the group corresponding to the current platform.
 
-## CLI 命令映射
+## CLI Command Mapping
 
-常用操作在 GitHub (`gh`) 与 GitLab (`glab`) 之间的对应关系：
+Common operations mapped between GitHub (`gh`) and GitLab (`glab`):
 
-| 操作 | GitHub (`gh`) | GitLab (`glab`) |
-|------|---------------|-----------------|
-| 列出 PR/MR | `gh pr list` | `glab mr list` |
-| 查看 PR/MR | `gh pr view <id>` | `glab mr view <id>` |
-| 查看 diff | `gh pr diff <id>` | `glab mr diff <id>` |
-| 新建 PR/MR | `gh pr create --base <t> --head <s>` | `glab mr create --target-branch <t> --source-branch <s>` |
-| 总体评论 | `gh pr comment <id> --body "..."` | `glab mr note <id> -m "..."` |
-| 查看 Issue | `gh issue view <id>` | `glab issue view <id>` |
-| CI / Pipeline 状态 | `gh pr checks <id>` | `glab ci trace <id>`、`glab mr view <id> --comments` |
+| Operation | GitHub (`gh`) | GitLab (`glab`) |
+|-----------|---------------|-----------------|
+| List PR/MR | `gh pr list` | `glab mr list` |
+| View PR/MR | `gh pr view <id>` | `glab mr view <id>` |
+| View diff | `gh pr diff <id>` | `glab mr diff <id>` |
+| Create PR/MR | `gh pr create --base <t> --head <s>` | `glab mr create --target-branch <t> --source-branch <s>` |
+| General comment | `gh pr comment <id> --body "..."` | `glab mr note <id> -m "..."` |
+| View Issue | `gh issue view <id>` | `glab issue view <id>` |
+| CI / Pipeline status | `gh pr checks <id>` | `glab ci trace <id>`, `glab mr view <id> --comments` |
 
-> 行级评论、resolve discussion、merge 等高级操作两个 CLI 都支持有限，必要时回退到对应平台的 REST API（GitHub `/repos/.../pulls/.../comments`，GitLab `/projects/.../merge_requests/.../discussions`）或 Web 界面。
+> Advanced operations like line comments, resolving discussions, and merging have limited CLI support on both platforms. Fall back to the platform's REST API (GitHub `/repos/.../pulls/.../comments`, GitLab `/projects/.../merge_requests/.../discussions`) or web UI when needed.
 
-## 工具优先级
+## Tool Priority
 
-| 操作 | 优先工具 | 回退方案 |
-|------|----------|----------|
-| 仓库操作（branch、commit、worktree） | `git` | — |
-| 平台对象（PR/MR、Issue、Pipeline、Note） | 平台官方 CLI（`gh` / `glab`） | 平台 REST API（`curl`）或 MCP |
-| 其他 | 当前环境最可用工具 | — |
+| Operation | Preferred tool | Fallback |
+|-----------|----------------|----------|
+| Repository operations (branch, commit, worktree) | `git` | — |
+| Platform objects (PR/MR, Issue, Pipeline, Note) | Platform official CLI (`gh` / `glab`) | Platform REST API (`curl`) or MCP |
+| Other | Most available tool in current environment | — |
 
-## Worktree 规则
+## Worktree Rules
 
-> **强制规则**：所有代码实现必须在 worktree 中完成，严禁在 root worktree（主目录）进行任何代码变更。
+> **Mandatory rule:** All code implementation must be done in a worktree — never make any code changes in the root worktree.
 
-- 新 worktree 放到 **root worktree 平级**，而不是放到 root worktree 下的子目录中。
-- 命名规则：`${root_worktree_name}--$(basename "$branch_name")`
-- 例如：root worktree 为 `huayi-dev-agent-skills`，branch 为 `fix/codex-marketplace-install`，则 worktree 名为 `huayi-dev-agent-skills--fix-codex-marketplace-install`。
-- 每次开始实现前，用 `git worktree list` 确认当前所在目录不是 root worktree。
+- New worktrees are placed **at the same level as the root worktree**, not inside subdirectories of the root worktree.
+- Naming convention: `${root_worktree_name}--$(basename "$branch_name")`
+- For example: if root worktree is `agent-skills` and branch is `fix/codex-marketplace-install`, the worktree name is `agent-skills--fix-codex-marketplace-install`.
+- Before starting any implementation, confirm the current directory is not the root worktree with `git worktree list`.
 
-## 交付要求
+## Delivery Requirements
 
-- 围绕 git 平台的工作流任务，最终交付物应是 **PR/MR 链接** 或 **已更新的 PR/MR 链接**。
-- Review 任务还应包括已经回写到 PR/MR 的评论。
-- 如果无法交付，必须明确说明阻塞原因，而不是把"本地已改完"当成完成。
+- Git platform workflow tasks must ultimately deliver a **PR/MR link** or an **updated PR/MR link**.
+- Review tasks should also include comments that have been written back to the PR/MR.
+- If delivery is not possible, clearly explain the blocking reason — do not treat "locally changed" as completion.

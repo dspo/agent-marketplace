@@ -1,34 +1,34 @@
 {
-  "name": "huayi-dev-plugins",
-  "description": "花易项目统一 Plugin Marketplace — Git 平台助手、试卷生成、浏览器自动化、MiMo 编程助手",
+  "name": "agent-skills",
+  "description": "Agent Skills Marketplace — Git platform assistant, exam generator, browser automation, and programming assistants",
   "owner": {
-    "name": "huayi",
-    "url": "https://git.huayi.tech/huayi"
+    "name": "Agent Skills",
+    "url": "https://github.com/agent-skills"
   },
   "plugins": [
     {
       "name": "gitwork",
-      "description": "Git 平台开发助手 — deliver、review、resolve、conflict 四个专项 skill，结合 gh / glab CLI 管理 GitHub 与 GitLab 项目交付",
+      "description": "Git platform development assistant — deliver, review, resolve, and conflict skills combined with gh / glab CLI for GitHub and GitLab project delivery",
       "source": "./plugins/gitwork"
     },
     {
       "name": "exam-generator",
-      "description": "试卷生成器 — 基于知识库生成专业试卷，支持多种题型、LaTeX 排版和 PDF 导出",
+      "description": "Exam generator from knowledge bases — supports multiple question types, LaTeX rendering, and PDF export",
       "source": "./plugins/exam-generator"
     },
     {
       "name": "playwright-cli",
-      "description": "浏览器自动化 — 使用 playwright-cli 进行网页测试、表单填写、截图和数据提取",
+      "description": "Browser automation using playwright-cli — web testing, form filling, screenshots, and data extraction",
       "source": "./plugins/playwright-cli"
     },
     {
       "name": "mimo",
-      "description": "MiMo 编程助手 — 使用 MiMo 进行代码审查、委托任务和 stop-gate 审查",
+      "description": "Programming assistant — code review, task delegation, and stop-gate review using MiMo",
       "source": "./plugins/mimo"
     },
     {
       "name": "remora",
-      "description": "remora 自包含 task agent — 内嵌 pi agent harness，用非 Claude 模型做交叉验证与第二意见，无须安装第三方 CLI",
+      "description": "Self-contained task agent — embeds pi agent harness, uses non-Claude models for cross-validation and second opinions, no third-party CLI required",
       "source": "./plugins/remora"
     }
   ]

@@ -1,12 +1,12 @@
 {
-  "name": "huayi-dev-plugins",
+  "name": "agent-skills",
   "interface": {
-    "displayName": "Huayi Dev Plugins"
+    "displayName": "Agent Skills"
   },
   "plugins": [
     {
       "name": "gitwork",
-      "description": "Git 平台开发助手 — deliver、review、resolve、conflict 四个专项 skill，结合 gh / glab CLI 管理 GitHub 与 GitLab 项目交付",
+      "description": "Git platform development assistant — deliver, review, resolve, and conflict skills combined with gh / glab CLI for GitHub and GitLab project delivery",
       "source": {
         "source": "local",
         "path": "./plugins/gitwork"

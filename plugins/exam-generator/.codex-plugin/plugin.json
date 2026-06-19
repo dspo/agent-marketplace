@@ -1,13 +1,13 @@
 {
   "name": "exam-generator",
   "version": "1.0.0",
-  "description": "试卷生成器，基于知识库与约束生成试题、LaTeX 试卷和答题卡。",
+  "description": "Exam generator from knowledge bases with LaTeX rendering and PDF export.",
   "author": {
-    "name": "Huayi",
-    "url": "https://git.huayi.tech/huayi"
+    "name": "Agent Skills",
+    "url": "https://github.com/agent-skills"
   },
-  "homepage": "https://git.huayi.tech/huayi/shared/agent-skills",
-  "repository": "https://git.huayi.tech/huayi/shared/agent-skills",
+  "homepage": "https://github.com/agent-skills/agent-skills",
+  "repository": "https://github.com/agent-skills/agent-skills",
   "keywords": [
     "exam",
     "latex",
@@ -18,7 +18,7 @@
     "displayName": "Exam Generator",
     "shortDescription": "Generate exams and answer sheets from a knowledge base",
     "longDescription": "Generate professional exams from source materials and constraints, then render them through bundled LaTeX templates.",
-    "developerName": "Huayi",
+    "developerName": "Agent Skills",
     "category": "Productivity",
     "capabilities": [
       "Interactive",

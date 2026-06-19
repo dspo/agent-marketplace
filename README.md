@@ -1,19 +1,19 @@
-# Agent Marketplace
+# Agent Skills Marketplace
 
-花易项目的统一 **Plugin Marketplace**，同时兼容 Claude Code、GitHub Copilot CLI 和 OpenAI Codex。
+A unified **Plugin Marketplace** for AI coding assistants, compatible with Claude Code, GitHub Copilot CLI, and OpenAI Codex.
 
-用户无需 clone 本仓库——直接通过 Git 仓库地址在线注册 marketplace，即可安装插件。
+Plugins are distributed as git repositories — users register a marketplace by its HTTPS URL, then install plugins by name without cloning the repository.
 
-## 安装
+## Installation
 
 ### Claude Code
 
 ```bash
-# 注册 marketplace（使用 HTTPS + 凭据，无需 clone）
-# 将 <user>:<token> 替换为你的 GitLab 用户名和 access token
-/plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
+# Register the marketplace (HTTPS + credentials format)
+# Replace <user>:<token> with your GitLab/GitHub username and access token
+/plugin marketplace add https://<user>:<token>@<your-git-host>/<org>/agent-marketplace.git
 
-# 安装插件
+# Install plugins
 /plugin install gitwork
 /plugin install mimo
 /plugin install exam-generator
@@ -21,77 +21,45 @@
 /plugin install remora
 ```
 
-> ⚠️ SSH 格式（`git@git.huayi.tech:2222/...`）在 Claude Code 中不可用，
-> 因为其内部 git clone 环境无法验证自定义 SSH 主机密钥。请使用 HTTPS 格式。
+> **Note:** SSH format (`git@host:...`) is not supported in Claude Code because its internal git clone environment cannot verify custom SSH host keys. Use HTTPS format instead.
 
-注册后 Claude Code 会自动拉取仓库缓存，后续 `/plugin install` 即可按名称安装。
+Once registered, Claude Code caches the repository automatically. Subsequent `/plugin install <name>` calls pull from cache.
 
 ### GitHub Copilot CLI
 
 ```bash
-# 注册 marketplace（Copilot CLI 共享 .claude-plugin/ 索引）
-copilot plugin marketplace add https://<user>:<token>@git.huayi.tech/huayi/shared/agent-marketplace.git
+# Register the marketplace (shares .claude-plugin/ index)
+copilot plugin marketplace add https://<user>:<token>@<your-git-host>/<org>/agent-marketplace.git
 
-# 安装插件
+# Install plugins
 copilot plugin install gitwork
 ```
 
 ### OpenAI Codex
 
-Codex 通过 `.agents/plugins/marketplace.json` 发现插件，并从每个插件目录下的
-`.codex-plugin/plugin.json` 与 `skills/` 读取插件元数据和 skill。
+Codex discovers plugins via `.agents/plugins/marketplace.json` and reads metadata from each plugin's `.codex-plugin/plugin.json` and `skills/` directory.
 
-## 项目结构
+## Available Plugins
 
-```text
-├── .gitignore
-├── .claude-plugin/marketplace.json       # Claude Code + Copilot CLI 共享索引
-├── .agents/plugins/marketplace.json      # OpenAI Codex 索引
-├── plugins/                              # 统一插件源码
-│   ├── gitwork/
-│   │   ├── .codex-plugin/plugin.json
-│   │   ├── skills/gitwork/SKILL.md
-│   │   ├── plugin.json
-│   │   └── SKILL.md
-│   ├── mimo/
-│   │   ├── plugin.json
-│   │   ├── SKILL.md
-│   │   ├── hooks/hooks.json
-│   │   ├── agents/mimo-rescue.md
-│   │   ├── commands/*.md
-│   │   ├── prompts/*.md
-│   │   ├── schemas/review-output.schema.json
-│   │   ├── scripts/*.mjs                 # 编译产物（已提交）
-│   │   └── _build/                       # TypeScript 源码和构建配置
-│   ├── exam-generator/
-│   │   ├── .codex-plugin/plugin.json
-│   │   ├── skills/exam-generator/SKILL.md
-│   │   ├── plugin.json
-│   │   ├── SKILL.md
-│   │   ├── examples/
-│   │   └── templates/
-│   ├── playwright-cli/
-│   │   ├── .codex-plugin/plugin.json
-│   │   ├── skills/playwright-cli/SKILL.md
-│   │   ├── plugin.json
-│   │   ├── SKILL.md
-│   │   └── references/
-│   └── remora/
-│       ├── .codex-plugin/plugin.json
-│       ├── skills/rescue/SKILL.md
-│       ├── plugin.json
-│       ├── commands/*.md
-│       ├── scripts/remora.mjs           # esbuild 单文件产物（已提交）
-│       └── _build/                      # TypeScript 源码和构建配置
-├── CLAUDE.md
-└── README.md
-```
+| Plugin | Description |
+|--------|-------------|
+| **gitwork** | Git platform development assistant — deliver, review, resolve, and handle merge conflicts. Works with GitHub (`gh`) and GitLab (`glab`) CLI. |
+| **mimo** | Programming assistant for code review, task delegation, and stop-gate reviews. |
+| **exam-generator** | Exam generator from knowledge bases with LaTeX rendering and PDF export. |
+| **playwright-cli** | Browser automation using playwright-cli for testing, screenshots, and data extraction. |
+| **remora** | Self-contained task agent with built-in pi harness for cross-validation using non-Claude models. |
 
-## 维护规则
+## Maintenance
 
-1. 新增或修改插件时，只改 `plugins/<name>/` 和两份 `marketplace.json`。
-2. Claude Code / Copilot CLI 和 Codex 共享 `skills/<skill>/SKILL.md`，不再使用根级 `SKILL.md`。
-3. Codex 使用 `.codex-plugin/plugin.json`（其中 `"skills": "./skills/"` 指向插件根目录下的 `skills/`）。
-4. `.claude-plugin/marketplace.json` 与 `.agents/plugins/marketplace.json` 需要分别维护各自 schema。
-5. 多 skill 插件的每个 skill 独立维护，引用共享原则文件（`references/principles.md`）而非互相复制内容。
-6. `.claude/worktrees/` 不应提交到 Git，已在 `.gitignore` 中排除。
+When adding or modifying plugins:
+
+1. Only touch `plugins/<name>/` and the two marketplace index files.
+2. Claude Code, Copilot CLI, and Codex share `skills/<skill>/SKILL.md` — do not use root-level `SKILL.md`.
+3. Codex uses `.codex-plugin/plugin.json` with `"skills": "./skills/"` pointing to the plugin's `skills/` directory.
+4. `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json` have different schemas and must be maintained separately.
+5. For multi-skill plugins, each skill is maintained independently and references shared principle files via relative paths (e.g., `../../references/principles.md`).
+6. `.claude/worktrees/` is excluded from git and should not be committed.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) for details.

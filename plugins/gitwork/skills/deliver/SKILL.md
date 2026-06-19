@@ -71,7 +71,7 @@ git worktree add ../<root-worktree-name>--<branch-slug> <branch-name>
 - 运行测试验证变更正确性
 - 确保没有引入明显的 bug 或风格问题
 
-> **如何确认已在 worktree 中**：执行 `git worktree list`，确保当前工作目录不是 root worktree（如 `huayi-dev-agent-skills`），而是专用 worktree（如 `huayi-dev-agent-skills--<branch-slug>`）。
+> **如何确认已在 worktree 中**：执行 `git worktree list`，确保当前工作目录不是 root worktree（如 `agent-skills`），而是专用 worktree（如 `agent-skills--<branch-slug>`）。
 
 ### 4. 提交并推送
 
