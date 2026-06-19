@@ -1,0 +1,33 @@
+{
+  "name": "mimo",
+  "version": "0.2.0",
+  "description": "MiMo programming assistant for code review, task delegation, and stop-gate review using MiMo.",
+  "author": {
+    "name": "Agent Skills",
+    "url": "https://github.com/dspo/agent-marketplace"
+  },
+  "homepage": "https://github.com/dspo/agent-marketplace",
+  "repository": "https://github.com/dspo/agent-marketplace",
+  "keywords": [
+    "mimo",
+    "code-review",
+    "programming-assistant"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "mimo",
+    "shortDescription": "MiMo companion for code review and task delegation",
+    "longDescription": "Use MiMo from Claude Code for structured code review, adversarial review, and task delegation. MiMo is a Chinese AI programming assistant by Xiaomi.",
+    "developerName": "Agent Skills",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "用 MiMo 进行代码审查或委托任务。"
+    ],
+    "brandColor": "#FF6B35",
+    "screenshots": []
+  }
+}
