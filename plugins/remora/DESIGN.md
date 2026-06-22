@@ -30,27 +30,29 @@ mimo 插件那套基础设施——`mimo serve` 常驻 HTTP server、SSE 流、c
 
 ### 2.2 remora 的形态
 
-remora 收缩成两块：
+remora 收缩成三块：
 
 | 组件 | 内容 |
 | --- | --- |
-| `skills/task/SKILL.md` | 教 Claude 怎么打包上下文、怎么调起 remora、怎么读进度与结果 |
+| `agents/remora-task.md` | Claude Code 子 agent 定义（thin forwarder：`model: sonnet`、`tools: Bash`） |
+| `skills/task/SKILL.md` | 内部运行时契约（`user-invocable: false`）：教子 agent 怎么打包上下文、怎么调起 remora、怎么读进度与结果 |
 | `_build/` → `scripts/remora.mjs` | 一个**自包含、预打包（esbuild bundle）**的 Node CLI；pi 库 bundle 进单文件 |
 
 执行模型：
 
 ```text
 Claude Code（主 agent）
-  └─ skill: task（SKILL.md 指导）
-       └─ Bash（可 run_in_background）: node remora.mjs task  <<<task.json（stdin）
-            └─ remora.mjs  ← 短命进程，跑完即退
-                 └─ pi Agent（@earendil-works/pi-agent-core，进程内）
-                      ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
-                      ├─ tools：read/grep/find/ls（自写薄 AgentTool）
-                      ├─ beforeToolCall：READ_ONLY / WRITE 权限门      ← remora 注入
-                      └─ pi-ai Model 字面量 → 任意 provider（含 OpenAI 兼容）
-            ↑ 进度走 stderr(NDJSON)，最终结果走 stdout
-       └─ BashOutput / Monitor 读进度，KillShell 取消
+  └─ Agent(remora:remora-task) — 通过 Agent 工具 spawn 子 agent
+       └─ subagent（model: sonnet, tools: Bash, thin forwarder）
+            └─ Bash（可 run_in_background）: node remora.mjs task  <<<task.json（stdin）
+                 └─ remora.mjs  ← 短命进程，跑完即退
+                      └─ pi Agent（@earendil-works/pi-agent-core，进程内）
+                           ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
+                           ├─ tools：read/grep/find/ls（自写薄 AgentTool）
+                           ├─ beforeToolCall：READ_ONLY / WRITE 权限门      ← remora 注入
+                           └─ pi-ai Model 字面量 → 任意 provider（含 OpenAI 兼容）
+                 ↑ 进度走 stderr(NDJSON)，最终结果走 stdout
+            └─ BashOutput / Monitor 读进度，KillShell 取消
 ```
 
 **没有常驻进程，没有 HTTP，没有自定义 job 系统。** 异步追踪、取消、进度全部复用 Claude Code 既有的 background-shell 能力。
@@ -66,9 +68,8 @@ Claude Code（主 agent）
 | Agent 内核 | mimo serve 内部（不可见、不可控） | pi-agent-core（开源、可读、可定制 tools/钩子） |
 | 模型 | mimo 配的 provider | pi-ai：40+ provider + 任意 OpenAI 兼容端点 |
 | 失败模式 | 端口占用、孤儿 daemon、健康检查、SSE 协议错 | 基本只有"进程跑挂了" |
-| 要写的代码 | 移植多文件 server/client/lifecycle/job 设施 | ~250 行 CLI 胶水 + 一个 SKILL.md |
-
-> 唯一值得从 mimo **借鉴**（非复用）的是 mimo task prompt 的上下文打包思路与进度渲染格式——这是参考重写，不是搬脚手架。
+| 要写的代码 | 移植多文件 server/client/lifecycle/job 设施 | ~250 行 CLI 胶水 + 一个 subagent + 一个 SKILL.md |
+> 唯一值得从 mimo **借鉴**（非复用）的是 mimo rescue prompt 的上下文打包思路与进度渲染格式——这是参考重写，不是搬脚手架。
 
 ## 3. 文件结构
 
@@ -107,7 +108,7 @@ plugins/remora/
 
 remora 的"编排层"是 `agents/remora-task.md` 定义的 Claude Code 子 agent。主 agent 通过 `Agent` 工具 spawn `remora:remora-task`，子 agent 读 `skills/task/SKILL.md`（`user-invocable: false`，内部运行时契约）获取 task JSON schema 与 CLI 调用约定，然后执行一次 Bash 调用 `node remora.mjs task`，原样返回 `finalMessage`。它替代了 mimo 的 subagent 转发 + job 命令面。子 agent 职责：
 
-1. **组织上下文**：把当前卡住的问题、相关文件路径、已尝试的方案、期望产出，表示成一个 task JSON（**不落盘**），用 heredoc 经 stdin 喂给 CLI。借鉴 mimo task prompt 的结构化打包思路。task 的持久化由 remora 自己的 session（见 5.5）负责，编排层无须落文件。
+1. **组织上下文**：把当前卡住的问题、相关文件路径、已尝试的方案、期望产出，表示成一个 task JSON（**不落盘**），用 heredoc 经 stdin 喂给 CLI。借鉴 mimo rescue prompt 的结构化打包思路。task 的持久化由 remora 自己的 session（见 5.5）负责，编排层无须落文件。
 2. **调起 CLI**：
    - 前台（短任务）：`node <plugin>/scripts/remora.mjs task <<<task.json`（stdin），直接读 stdout 结果。
    - 后台（长任务）：用 `run_in_background` 跑同一命令，再用 `BashOutput` 轮询 stderr 进度、`Monitor` 流式盯关键事件、`KillShell` 取消。
