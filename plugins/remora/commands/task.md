@@ -1,21 +1,54 @@
 ---
 description: 把卡住的问题委托给 remora task agent（自包含、非 Claude 第二意见）
-argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [要 remora 调查或解决的问题]"
-allowed-tools: Bash(node:*), BashOutput, KillShell
+argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [--write] [要 remora 调查或解决的问题]"
+allowed-tools: Bash(node:*), AskUserQuestion, Agent
 ---
 
-调用 `remora:task` skill 处理用户的请求。按 skill 的流程：把上下文组织成 task JSON → 用 heredoc 经 stdin 喂给 `scripts/remora.mjs` → 读 stdout 结果 → 把 `finalMessage` 原样转达给用户。
+Invoke the `remora:remora-task` subagent via the `Agent` tool (`subagent_type: "remora:remora-task"`), forwarding the raw user request as the prompt.
+`remora:remora-task` is a subagent, not a skill — do not call `Skill(remora:remora-task)` (no such skill) or `Skill(remora:task)` (that re-enters this command and hangs the session). The command runs inline so the `Agent` tool stays in scope; forked general-purpose subagents do not expose it.
+The final user-visible response must be remora's `finalMessage` verbatim.
 
-用户请求：
+Raw user request:
 
 $ARGUMENTS
 
-执行约定：
+Execution mode:
 
-- 把用户的自然语言请求提炼成 task JSON 的 `prompt`，连同已知的 `problem`/`files`/`attempted`/`expected` 字段，用 heredoc 经 **stdin** 传给 CLI。**不要 `Write` 任何 task 文件** —— task 不落盘，留痕由 remora 自己的 session（`~/.remora/projects/…/<id>.jsonl`）负责。
-- 默认前台运行。请求里出现 `--background` 时用 `run_in_background` 跑，再用 `BashOutput` 轮询 stderr 进度、`KillShell` 取消。
-- `--continue`（续当前 cwd 最近 session）/ `--resume <id>`（续指定 session，id 取上次结果里的 `sessionId`）/ `--model` 原样转发给 `remora.mjs`。它们是 Claude Code 风格的 resume flag，不要当作自然语言任务文本。
-- `--background` 是 Claude Code 的执行标志，不要转发给 `remora.mjs`。
-- 最终给用户的回复 = remora stdout 里的 `finalMessage`，原样转达，不改写、不加评论。若想接着上次继续，记下结果里的 `sessionId`，下次带 `--resume <sessionId>`。
-- 若 CLI 非零退出：透传 stderr 末行的 error message，并提示用户运行 `/remora:setup` 检查 provider 配置。
-- 若用户没给请求内容，先问清楚要 remora 调查或解决什么。
+- If the request includes `--background`, run the `remora:remora-task` subagent in the background.
+- If the request includes `--wait`, run the `remora:remora-task` subagent in the foreground.
+- If neither flag is present, default to foreground.
+- `--background` and `--wait` are execution flags for Claude Code. Do not forward them to the `task` CLI, and do not treat them as part of the natural-language task text.
+- `--model` is a runtime-selection flag. Preserve it for the forwarded `task` call, but do not treat it as part of the natural-language task text.
+- `--write` enables write mode in remora (allows file edits). Only forward it when the user explicitly asks remora to make changes.
+
+Session routing:
+
+- `--continue` / `-c` means continue the most recent session in the current cwd.
+- `--resume <id>` / `-r <id>` means resume a specific session by id.
+- If the request includes `--continue` or `--resume`, do not ask whether to continue. The user already chose.
+- Otherwise, before starting remora, check for a resumable session in this repo by running:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" sessions list
+```
+
+- If the output lists any session (i.e. it does not print `(no sessions in this cwd)`), use `AskUserQuestion` exactly once to ask whether to continue the current remora session or start a new one.
+- The two choices must be:
+  - `Continue current remora session`
+  - `Start a new remora session`
+- If the user is clearly giving a follow-up instruction such as "continue", "keep going", "resume", "apply the top fix", or "dig deeper", put `Continue current remora session (Recommended)` first.
+- Otherwise put `Start a new remora session (Recommended)` first.
+- If the user chooses continue, add `--continue` before routing to the subagent.
+- If the user chooses a new session, do not add `--continue` or `--resume`.
+- If the helper reports no sessions available (prints `(no sessions in this cwd)`), do not ask. Route normally.
+
+Operating rules:
+
+- The subagent is a thin forwarder only. It should use one `Bash` call to invoke `node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" task` with the task JSON fed via stdin (heredoc), and return the `finalMessage` field from the stdout JSON as-is.
+- Return remora's `finalMessage` verbatim to the user.
+- Do not paraphrase, summarize, rewrite, or add commentary before or after it.
+- Do not ask the subagent to inspect files, monitor progress, poll output, fetch results, cancel jobs, summarize output, or do follow-up work of its own.
+- Leave `--model` unset unless the user explicitly asks for one.
+- Treat `--continue`, `--resume <id>`, and `--model <value>` as routing controls and do not include them in the task text you pass through.
+- If remora fails (non-zero exit), tell the user to run `/remora:setup` to check provider configuration.
+- If the user did not supply a request, ask what remora should investigate or solve.

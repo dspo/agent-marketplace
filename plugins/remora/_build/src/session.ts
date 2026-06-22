@@ -270,7 +270,7 @@ export function appendTitleEntry(session: Session<JsonlSessionMetadata>, firstPr
 }
 
 /**
- * Record the parent Claude Code session id this rescue was spawned from, as a
+ * Record the parent Claude Code session id this task was spawned from, as a
  * `custom` entry (pi's escape hatch for extension-private data). Claude Code
  * injects `CLAUDE_CODE_SESSION_ID` (UUIDv4) into the subprocess env; when remora
  * runs outside Claude Code the env is absent and nothing is recorded.
