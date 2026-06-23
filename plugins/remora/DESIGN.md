@@ -1,17 +1,17 @@
 # remora 插件设计文档
 
-> 插件名 `remora`（䲟鱼）——一种附着在鲨鱼、鲸身上共生的鱼，靠吃宿主的寄生虫与食物残屑为生。借喻：remora 附着在主 agent（Claude Code）旁，接手它处理不动的残局、做交叉验证与 rescue。self-contained，无第三方 agent CLI 依赖。
+> 插件名 `remora`（䲟鱼）——一种附着在鲨鱼、鲸身上共生的鱼，靠吃宿主的寄生虫与食物残屑为生。借喻：remora 附着在主 agent（Claude Code）旁，接手它处理不动的残局、做交叉验证与 task。self-contained，无第三方 agent CLI 依赖。
 
 ## 1. 背景与动机
 
 现有 `mimo` / `codex` 插件本质是**桥接器**：它们把任务转发给一个外部 agent CLI（`mimo serve` / `codex`），自己只负责进程生命周期管理和 HTTP 通信。用户必须先 `npm i -g` 安装那个第三方 CLI，插件才能工作。
 
-本设计目标：做一个**功能对标 `mimo:rescue` 的自包含插件**，agent loop / harness / provider 三件套全部内嵌，用户**无须安装任何第三方 agent CLI**，只需配置一个 model endpoint。
+本设计目标：做一个**功能对标 `mimo:rescue` 的自包含插件**（remora 的等价概念是 `task`），agent loop / harness / provider 三件套全部内嵌，用户**无须安装任何第三方 agent CLI**，只需配置一个 model endpoint。
 
 三个动机（已与需求方确认）：
 
 1. **降低安装门槛** —— 团队成员不必各自装 mimo/codex CLI，开箱即用。
-2. **真正不同的第二意见** —— rescue 场景需要一个**非 Claude** 的模型来交叉验证、跳出思维定势。这要求 provider 必须能接非 Claude 模型。
+2. **真正不同的第二意见** —— task 场景需要一个**非 Claude** 的模型来交叉验证、跳出思维定势。这要求 provider 必须能接非 Claude 模型。
 3. **验证可行性** —— 探索"插件自带完整 agent"这条路是否成立。
 
 > **底座选型**：调研 `~/projects/github/pi` 与 `oh-my-pi` 后确定——**pi 本身就是一套库化的 agent harness**（`@earendil-works/pi-agent-core` + `pi-ai`），把我们要写的 ReAct loop、多 provider 抽象、工具系统、事件流、resume、上下文压缩钩子全部做成了成熟 npm 包。因此 remora **以 pi 为底座**（嵌入 pi-agent-core + pi-ai），不再手写 agent 内核。pi/oh-my-pi 是 remora 的 **build-time 库依赖**（随插件 `npm install` 自动拉取），不是要用户手动安装的 CLI。
@@ -26,31 +26,33 @@ mimo 插件那套基础设施——`mimo serve` 常驻 HTTP server、SSE 流、c
 
 **关键洞察：Claude Code 的 harness 本身就是 job 系统。** background Bash + `BashOutput` 轮询 + `KillShell` 取消 + Monitor 流式监听——异步任务追踪它全有。在插件里再造一套 job manager 是纯浪费。
 
-> mimo 需要 daemon 是为了"保温"一个 agent 给多次请求复用；remora 每次 rescue 就是一次自治运行，冷启动完全可接受，**不需要 daemon、不需要 server、不需要自造 job 系统**。
+> mimo 需要 daemon 是为了"保温"一个 agent 给多次请求复用；remora 每次 task 就是一次自治运行，冷启动完全可接受，**不需要 daemon、不需要 server、不需要自造 job 系统**。
 
 ### 2.2 remora 的形态
 
-remora 收缩成两块：
+remora 收缩成三块：
 
 | 组件 | 内容 |
 | --- | --- |
-| `skills/task/SKILL.md` | 教 Claude 怎么打包上下文、怎么调起 remora、怎么读进度与结果 |
+| `agents/remora-task.md` | Claude Code 子 agent 定义（thin forwarder：`model: sonnet`、`tools: Bash`） |
+| `skills/task/SKILL.md` | 内部运行时契约（`user-invocable: false`）：教子 agent 怎么打包上下文、怎么调起 remora、怎么读进度与结果 |
 | `_build/` → `scripts/remora.mjs` | 一个**自包含、预打包（esbuild bundle）**的 Node CLI；pi 库 bundle 进单文件 |
 
 执行模型：
 
 ```text
 Claude Code（主 agent）
-  └─ skill: task（SKILL.md 指导）
-       └─ Bash（可 run_in_background）: node remora.mjs task  <<<task.json（stdin）
-            └─ remora.mjs  ← 短命进程，跑完即退
-                 └─ pi Agent（@earendil-works/pi-agent-core，进程内）
-                      ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
-                      ├─ tools：read/grep/find/ls（自写薄 AgentTool）
-                      ├─ beforeToolCall：READ_ONLY / WRITE 权限门      ← remora 注入
-                      └─ pi-ai Model 字面量 → 任意 provider（含 OpenAI 兼容）
-            ↑ 进度走 stderr(NDJSON)，最终结果走 stdout
-       └─ BashOutput / Monitor 读进度，KillShell 取消
+  └─ Agent(remora:remora-task) — 通过 Agent 工具 spawn 子 agent
+       └─ subagent（model: sonnet, tools: Bash, thin forwarder）
+            └─ Bash（可 run_in_background）: node remora.mjs task  <<<task.json（stdin）
+                 └─ remora.mjs  ← 短命进程，跑完即退
+                      └─ pi Agent（@earendil-works/pi-agent-core，进程内）
+                           ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
+                           ├─ tools：read/grep/find/ls（自写薄 AgentTool）
+                           ├─ beforeToolCall：READ_ONLY / WRITE 权限门      ← remora 注入
+                           └─ pi-ai Model 字面量 → 任意 provider（含 OpenAI 兼容）
+                 ↑ 进度走 stderr(NDJSON)，最终结果走 stdout
+            └─ BashOutput / Monitor 读进度，KillShell 取消
 ```
 
 **没有常驻进程，没有 HTTP，没有自定义 job 系统。** 异步追踪、取消、进度全部复用 Claude Code 既有的 background-shell 能力。
@@ -66,9 +68,8 @@ Claude Code（主 agent）
 | Agent 内核 | mimo serve 内部（不可见、不可控） | pi-agent-core（开源、可读、可定制 tools/钩子） |
 | 模型 | mimo 配的 provider | pi-ai：40+ provider + 任意 OpenAI 兼容端点 |
 | 失败模式 | 端口占用、孤儿 daemon、健康检查、SSE 协议错 | 基本只有"进程跑挂了" |
-| 要写的代码 | 移植多文件 server/client/lifecycle/job 设施 | ~250 行 CLI 胶水 + 一个 SKILL.md |
-
-> 唯一值得从 mimo **借鉴**（非复用）的是 rescue prompt 的上下文打包思路与进度渲染格式——这是参考重写，不是搬脚手架。
+| 要写的代码 | 移植多文件 server/client/lifecycle/job 设施 | ~250 行 CLI 胶水 + 一个 subagent + 一个 SKILL.md |
+> 唯一值得从 mimo **借鉴**（非复用）的是 mimo rescue prompt 的上下文打包思路与进度渲染格式——这是参考重写，不是搬脚手架。
 
 ## 3. 文件结构
 
@@ -78,10 +79,12 @@ plugins/remora/
 ├── .codex-plugin/plugin.json         # Codex manifest（对齐仓库规范）
 ├── skills/
 │   └── task/
-│       └── SKILL.md                  # ★ 指导主 agent：打包上下文 → 调 CLI → 读进度/结果
+│       └── SKILL.md                  # ★ 内部运行时契约（user-invocable: false）：task JSON schema + CLI 调用约定
+├── agents/
+│   └── remora-task.md                # ★ Claude Code 子 agent：thin forwarder，spawn 后调一次 remora.mjs task
 ├── commands/
 │   ├── setup.md                      # 检查 Node + 校验 provider 配置连通性
-│   └── task.md                     # 触发 task skill
+│   └── task.md                       # 通过 Agent 工具调 remora:remora-task 子 agent
 ├── scripts/
 │   └── remora.mjs                    # ★ esbuild bundle 产物（自包含 CLI，含 pi 库）
 └── _build/
@@ -101,9 +104,9 @@ plugins/remora/
 
 > **依赖说明**：remora 通过 npm **规范依赖**上游 pi 发布包（`@earendil-works/pi-agent-core` + `pi-ai`），**不 vendor 源码、不抄袭**。这些是**库依赖**，由 esbuild 在 build 时 bundle 进 `remora.mjs`——发布产物是单文件，运行时甚至不需要 `node_modules`。对用户是"装插件即可用"。
 
-## 4. SKILL.md —— 主 agent 的使用契约
+## 4. 编排层 —— `remora:remora-task` 子 agent + `skills/task/SKILL.md` 运行时契约
 
-remora 的"编排层"不是代码，而是 `skills/task/SKILL.md` 里给主 agent 的指令。它替代了 mimo 的 subagent 转发 + job 命令面。SKILL 教 Claude：
+remora 的"编排层"是 `agents/remora-task.md` 定义的 Claude Code 子 agent。主 agent 通过 `Agent` 工具 spawn `remora:remora-task`，子 agent 读 `skills/task/SKILL.md`（`user-invocable: false`，内部运行时契约）获取 task JSON schema 与 CLI 调用约定，然后执行一次 Bash 调用 `node remora.mjs task`，原样返回 `finalMessage`。它替代了 mimo 的 subagent 转发 + job 命令面。子 agent 职责：
 
 1. **组织上下文**：把当前卡住的问题、相关文件路径、已尝试的方案、期望产出，表示成一个 task JSON（**不落盘**），用 heredoc 经 stdin 喂给 CLI。借鉴 mimo rescue prompt 的结构化打包思路。task 的持久化由 remora 自己的 session（见 5.5）负责，编排层无须落文件。
 2. **调起 CLI**：
@@ -348,9 +351,9 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 
 ## 9. 落地路径
 
-1. **阶段一（POC，read-only rescue）**：scaffold `plugins/remora/`，写 `cli.ts` + `config.ts` + `runtime.ts` + `tools.ts` + `permissions.ts`，仅依赖 `pi-agent-core` + `pi-ai`（路线 B）。bundle 链路与 API 已验证，直接落地：构造自定义 Model、getApiKey 注入 key、自写 read/grep/find/ls 薄工具、beforeToolCall 权限门、事件→stderr 桥接、stdout 结果契约。esbuild build 脚本带 `createRequire` banner。
-2. **阶段二（✅ 已完成，write rescue）**：自写 `write_file` / `edit_file` 工具 + WRITE 权限档 + 行级 unified diff 跟踪（`diff.ts` / `TurnResult.edits`），打通 `--write`；`bash` 改为始终注册、只读模式白名单收口（拒元字符 + 首词白名单）。已用真实端点端到端验证。bundle 减重（按 provider 子路径导入）评估为非阻塞,留待后续。
-3. **阶段三（✅ 已完成）**：`session.ts` resume（2MB 上限）+ `/remora:setup`（Node 版本 + provider 连通性探测）已在前期落地；本阶段补齐**上下文压缩**——`compaction.ts` 用 pi 的 `transformContext` 钩子接 `generateSummary`：低于 `shouldCompact` 阈值零开销返回原 messages（单轮 rescue 常态），超阈值则保留最近窗口（`keepRecentTokens`）、把中段历史压成一条摘要消息，`generateSummary` 失败降级为原样不崩。已用真实端点验证：600 条消息（~164k tokens）压成 74 条、低阈值不触发。同时修正 `session.ts` 里"保留 system 消息"的死注释（system 是 Agent 独立字段、不在 messages 数组内）。
+1. **阶段一（POC，read-only task）**：scaffold `plugins/remora/`，写 `cli.ts` + `config.ts` + `runtime.ts` + `tools.ts` + `permissions.ts`，仅依赖 `pi-agent-core` + `pi-ai`（路线 B）。bundle 链路与 API 已验证，直接落地：构造自定义 Model、getApiKey 注入 key、自写 read/grep/find/ls 薄工具、beforeToolCall 权限门、事件→stderr 桥接、stdout 结果契约。esbuild build 脚本带 `createRequire` banner。
+2. **阶段二（✅ 已完成，write task）**：自写 `write_file` / `edit_file` 工具 + WRITE 权限档 + 行级 unified diff 跟踪（`diff.ts` / `TurnResult.edits`），打通 `--write`；`bash` 改为始终注册、只读模式白名单收口（拒元字符 + 首词白名单）。已用真实端点端到端验证。bundle 减重（按 provider 子路径导入）评估为非阻塞,留待后续。
+3. **阶段三（✅ 已完成）**：`session.ts` resume（2MB 上限）+ `/remora:setup`（Node 版本 + provider 连通性探测）已在前期落地；本阶段补齐**上下文压缩**——`compaction.ts` 用 pi 的 `transformContext` 钩子接 `generateSummary`：低于 `shouldCompact` 阈值零开销返回原 messages（单轮 task 常态），超阈值则保留最近窗口（`keepRecentTokens`）、把中段历史压成一条摘要消息，`generateSummary` 失败降级为原样不崩。已用真实端点验证：600 条消息（~164k tokens）压成 74 条、低阈值不触发。同时修正 `session.ts` 里"保留 system 消息"的死注释（system 是 Agent 独立字段、不在 messages 数组内）。
 4. **阶段四（可选）**：借鉴 oh-my-pi 的哈希编辑 / benchmaxxed 提示思路自写增强。
 
 可行性已验证，阶段一是纯落地工作，预计 **0.5 天**出可跑原型。
@@ -358,7 +361,7 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 ## 10. 决策点（全部已定）
 
 - [x] **命名 = `remora`**（䲟鱼，与鲨鲸共生、清理残屑的借喻）。
-- [x] **架构 = 无 daemon 单文件 CLI**：不照搬 mimo 脚手架（无 server/HTTP/自造 job 系统）；异步追踪复用 Claude Code 的 background Bash / BashOutput / KillShell / Monitor。编排层是 `skills/task/SKILL.md`，不是 subagent 转发。
+- [x] **架构 = 无 daemon 单文件 CLI + subagent 编排**：不照搬 mimo 脚手架（无 server/HTTP/自造 job 系统）；异步追踪复用 Claude Code 的 background Bash / BashOutput / KillShell / Monitor。编排层是 `agents/remora-task.md` 子 agent + `skills/task/SKILL.md` 运行时契约（对齐 codex-plugin-cc 的 `codex-rescue` 模式）。
 - [x] **provider 接入 = 直接构造 `Model` 字面量**（不走 `getModel` 注册表），key 经 `Agent.getApiKey` 注入。已实测。
 - [x] **工具依赖路线 = B**：仅依赖 `pi-agent-core` + `pi-ai`，文件工具自写。oh-my-pi 工具经核实为 bun-native + Rust，不可导入；上游 `pi-coding-agent`（路线 A）作为写盘阶段备选。
 - [x] **POC endpoint = 百炼/DashScope**：`https://dashscope.aliyuncs.com/compatible-mode/v1`，model `deepseek-v4-pro`（实测裸 id 可用），key 取 keychain 的 `DASHSCOPE_API_KEY`。

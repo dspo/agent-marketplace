@@ -119,7 +119,7 @@ function newRepo(cwd: string): JsonlSessionRepo {
  * List sessions for `cwd`, newest-first, each enriched with its derived
  * {@link SessionStatus} (from the file tail) and auto-title (from the first
  * `session_info` entry). Mirrors oh-my-pi's `listSessions` at remora's scale
- * (serial scan — no parallel stride workers needed for short rescue sessions).
+ * (serial scan — no parallel stride workers needed for short task sessions).
  */
 export async function listSessions(cwd: string): Promise<SessionListItem[]> {
 	const repo = newRepo(cwd);
