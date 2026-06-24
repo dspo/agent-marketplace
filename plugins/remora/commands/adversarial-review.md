@@ -19,9 +19,10 @@ Raw slash-command arguments:
 不能把 diff 作为唯一上下文交给 remora。按以下顺序收集信息：
 
 1. 若 `prompt` 是 PR/MR 链接：
-   - 用 `gh pr view <url> --json title,body,headRefName,baseRefName,state,reviews,comments` 读取 PR 元数据；
-   - 用 `gh pr diff <url>` 读取 diff；
-   - 用 `gh pr view <url> --json author,createdAt,updatedAt` 等补充上下文。
+   - 读取 PR/MR 元数据：标题、描述、作者、状态、base 分支、head 分支、review/评论等；
+   - 读取 PR/MR 的 diff；
+   - 收集所有能反映原始需求、方案取舍、讨论背景的信息。
+   - 具体工具由 agent 根据平台选择（例如 GitHub 用 `gh`，GitLab 用 `glab`，或直接通过 API/页面提取），这里不强制指定命令。
 2. 若 `prompt` 是分支名：
    - 读取 `git log <base>..<branch> --oneline` 了解提交历史；
    - 读取 `git diff <base>...<branch>` 获取 diff；
@@ -149,7 +150,7 @@ Raw slash-command arguments:
    git merge --squash --no-edit <待合并分支>
    ```
 
-   或根据项目约定使用 `gh pr merge --squash`（若 prompt 是 PR 链接）。
+   或根据平台/项目约定使用 CLI 工具，例如 `gh pr merge --squash`（GitHub）或 `glab mr merge --squash`（GitLab）。
 
 3. **提交合并结果**：
 
