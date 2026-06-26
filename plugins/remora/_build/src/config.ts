@@ -3,7 +3,18 @@ import { readFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 
-import type { Model } from "@earendil-works/pi-ai";
+import {
+	createModels,
+	createProvider,
+	envApiKeyAuth,
+	type Model,
+	type Models,
+	type ProviderStreams,
+} from "@earendil-works/pi-ai";
+import {
+	stream as streamOpenAICompletions,
+	streamSimple as streamSimpleOpenAICompletions,
+} from "@earendil-works/pi-ai/api/openai-completions";
 
 /** Resolved provider configuration for a single OpenAI-compatible endpoint. */
 export interface ProviderConfig {
@@ -166,4 +177,47 @@ export function resolveModel(cfg: ProviderConfig): Model<"openai-completions"> {
 		contextWindow: cfg.contextWindow,
 		maxTokens: cfg.maxTokens,
 	};
+}
+
+/**
+ * Build a pi-ai `Models` registry for the single OpenAI-compatible endpoint.
+ *
+ * `generateSummary` (compaction) takes a `Models` (not a bare `Model` + key) so
+ * it can resolve auth and stream through the registry. We register one custom
+ * provider with remora's resolved key (via `envApiKeyAuth`) and the public
+ * openai-completions stream functions. The Agent itself still streams via its
+ * own `model` + `getApiKey` path; this registry is for the compaction summary
+ * call only.
+ *
+ * The key may have come from the keychain rather than env, so mirror it into
+ * `REMORA_API_KEY` for `envApiKeyAuth` to find (process-local; remora owns the
+ * process).
+ */
+export function buildModels(cfg: ProviderConfig, model: Model<"openai-completions">): Models {
+	// `envApiKeyAuth` resolves from env, so a key that came from the keychain
+	// (not env) must be mirrored into REMORA_API_KEY. Match loadConfig's `??`
+	// semantics: only mirror when the env var is truly unset (undefined), not
+	// when it's an empty string (which loadConfig would have rejected already).
+	// process-local — remora is a short-lived CLI.
+	if (cfg.apiKey && process.env.REMORA_API_KEY === undefined) process.env.REMORA_API_KEY = cfg.apiKey;
+	const models = createModels();
+	models.setProvider(
+		createProvider({
+			id: cfg.provider,
+			baseUrl: cfg.baseUrl,
+			auth: { apiKey: envApiKeyAuth("remora", ["REMORA_API_KEY"]) },
+			models: [model],
+			// `as ProviderStreams` is a defensive cast. `satisfies ProviderStreams`
+			// also compiles today (TS 5.7 + pi-ai 0.80.2 — the Model<TApi> structure
+			// isn't strictly contravariant on `api`), but the stream fns are
+			// StreamFunction<"openai-completions"> while ProviderStreams.stream
+			// expects Model<Api>; the cast insulates against future pi-ai type
+			// tightening. Runtime dispatch is on model.api + baseUrl.
+			api: {
+				stream: streamOpenAICompletions,
+				streamSimple: streamSimpleOpenAICompletions,
+			} as ProviderStreams,
+		}),
+	);
+	return models;
 }

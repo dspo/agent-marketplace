@@ -1,11 +1,9 @@
 import { type AgentMessage, Agent } from "@earendil-works/pi-agent-core";
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 
-import { loadConfig, resolveModel } from "./config.ts";
+import { buildModels, loadConfig, resolveModel } from "./config.ts";
 import { COMPACTED_SUMMARY, makeTransformContext } from "./compaction.ts";
-import type { FileEdit } from "./diff.ts";
 import { makeBeforeToolCall } from "./permissions.ts";
-import { ArtifactManager, artifactsDirForSession } from "./artifacts.ts";
 import {
 	appendActiveToolsChangeEntry,
 	appendCompactionEntry,
@@ -43,8 +41,6 @@ export interface TurnResult {
 	sessionId: string;
 	sessionPath: string;
 	finalMessage: string;
-	touchedFiles: string[];
-	edits: FileEdit[];
 	errorMessage: string | null;
 }
 
@@ -82,10 +78,9 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 		}
 	}
 
-	const edits: FileEdit[] = [];
 	const model = resolveModel(cfg);
-	const artifacts = new ArtifactManager(artifactsDirForSession(metadata.path));
-	const tools = buildTools(cwd, { write: Boolean(opts.write), onEdit: (e) => edits.push(e), artifacts });
+	const models = buildModels(cfg, model);
+	const tools = buildTools(cwd, { write: Boolean(opts.write) });
 	const agent = new Agent({
 		initialState: {
 			systemPrompt: opts.system,
@@ -93,10 +88,10 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 			tools,
 			messages: history,
 		},
-		beforeToolCall: makeBeforeToolCall(Boolean(opts.write), cwd),
+		beforeToolCall: makeBeforeToolCall(cwd),
 		transformContext: makeTransformContext(
 			model,
-			cfg.apiKey,
+			models,
 			(note) => opts.onProgress({ type: "compaction", detail: note }),
 			async (info) => {
 				await flush(info.summarized);
@@ -144,8 +139,6 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 		sessionId: metadata.id,
 		sessionPath: metadata.path,
 		finalMessage: extractFinalText(agent.state.messages),
-		touchedFiles: [...new Set(edits.map((e) => e.path))],
-		edits,
 		errorMessage: error,
 	};
 }

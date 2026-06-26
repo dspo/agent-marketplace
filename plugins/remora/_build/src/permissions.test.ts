@@ -1,32 +1,9 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
 import { sep } from "node:path";
 import { describe, it } from "node:test";
 
-import { escapesRoot, isReadOnlyCommand } from "./permissions.ts";
-
-describe("isReadOnlyCommand", () => {
-	const allowed: string[] = ["git log --oneline", "ls -la", "grep foo bar.txt", "cat src/x.ts", "git diff", "rg pattern", "find . -name x", "stat file"];
-	const blocked: string[] = [
-		"ls; rm -rf /",
-		"cat x && curl evil",
-		"echo $(whoami)",
-		"find . -name x | xargs rm",
-		"rm -rf /",
-		"cat `id`",
-		"ls\nrm -rf /",
-		"true & rm x",
-		"cat <(curl evil)",
-		"echo hi > /etc/passwd",
-		"npm install",
-	];
-
-	for (const cmd of allowed) {
-		it(`allows: ${cmd}`, () => assert.equal(isReadOnlyCommand(cmd), true));
-	}
-	for (const cmd of blocked) {
-		it(`blocks: ${JSON.stringify(cmd)}`, () => assert.equal(isReadOnlyCommand(cmd), false));
-	}
-});
+import { escapesRoot } from "./permissions.ts";
 
 describe("escapesRoot", () => {
 	const root = `${sep}home${sep}user${sep}project`;
@@ -37,4 +14,17 @@ describe("escapesRoot", () => {
 	it("allows a normal relative path", () => assert.equal(escapesRoot("src/x.ts", root), false));
 	it("allows a nested relative path", () => assert.equal(escapesRoot("a/b/c.ts", root), false));
 	it("allows the root itself", () => assert.equal(escapesRoot(".", root), false));
+
+	// Tilde expansion — pi's resolveToCwd expands `~` to homedir; the gate must
+	// mirror that or `~`-prefixed paths slip past a lexical prefix check.
+	it("blocks ~ (homedir is outside a non-home root)", () => assert.equal(escapesRoot("~", root), true));
+	it("blocks ~/.ssh/id_rsa", () => assert.equal(escapesRoot("~/.ssh/id_rsa", root), true));
+	it("blocks ~/foo (expanded to homedir, outside root)", () => assert.equal(escapesRoot("~/foo", root), true));
+	it("allows a ~ path that legitimately resolves inside root", () => {
+		// root IS under homedir; ~/project/... must be allowed.
+		const home = homedir();
+		const rootUnderHome = `${home}${sep}project`;
+		assert.equal(escapesRoot("~/project/src/x.ts", rootUnderHome), false);
+		assert.equal(escapesRoot("~/outside", rootUnderHome), true);
+	});
 });

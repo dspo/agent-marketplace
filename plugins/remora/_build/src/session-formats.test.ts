@@ -26,16 +26,16 @@ test("history format collapses tool call + result into one line", () => {
 		user("find the bug"),
 		assistant([
 			{ type: "text", text: "Reading the file..." },
-			{ type: "toolCall", id: "c1", name: "read_file", arguments: { path: "src/cli.ts", limit: 50 } },
+			{ type: "toolCall", id: "c1", name: "read", arguments: { path: "src/cli.ts", limit: 50 } },
 		]),
-		toolResult("c1", "read_file", "line1\nline2\nline3"),
+		toolResult("c1", "read", "line1\nline2\nline3"),
 	];
 	const out = formatSessionHistoryMarkdown(msgs);
 	assert.match(out, /## user/);
 	assert.match(out, /find the bug/);
 	assert.match(out, /## assistant/);
 	assert.match(out, /Reading the file\.\.\./);
-	assert.match(out, /→ read_file\(src\/cli\.ts\) ⇒ ok · 3 lines/);
+	assert.match(out, /→ read\(src\/cli\.ts\) ⇒ ok · 3 lines/);
 });
 
 test("history format renders tool errors", () => {

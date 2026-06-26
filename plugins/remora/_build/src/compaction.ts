@@ -6,7 +6,7 @@ import {
 	generateSummary,
 	shouldCompact,
 } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai";
+import type { Model, Models } from "@earendil-works/pi-ai";
 
 /** Marker set on the synthetic summary message so it isn't double-persisted as a `message` entry. */
 export const COMPACTED_SUMMARY = Symbol("remora:compactedSummary");
@@ -43,7 +43,7 @@ export interface CompactInfo {
  */
 export function makeTransformContext(
 	model: Model<"openai-completions">,
-	apiKey: string,
+	models: Models,
 	onNotice?: (note: string) => void,
 	onCompact?: (info: CompactInfo) => Promise<void> | void,
 	entryIdOf?: (message: AgentMessage) => string | undefined,
@@ -65,7 +65,15 @@ export function makeTransformContext(
 		const toSummarize = messages.slice(0, keepFrom);
 		const recent = messages.slice(keepFrom);
 
-		const result = await generateSummary(toSummarize, model, settings.reserveTokens, apiKey, undefined, signal);
+		let result: Awaited<ReturnType<typeof generateSummary>>;
+		try {
+			result = await generateSummary(toSummarize, models, model, settings.reserveTokens, signal);
+		} catch (err) {
+			// `transformContext` must not throw (pi's contract); a throw from the
+			// summary call would crash the turn. Degrade to no-compaction instead.
+			onNotice?.(`compaction skipped: ${String(err)}`);
+			return messages;
+		}
 		if (!result.ok) {
 			onNotice?.(`compaction skipped: ${result.error.message}`);
 			return messages;

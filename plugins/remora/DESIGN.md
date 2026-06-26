@@ -48,8 +48,8 @@ Claude Code（主 agent）
                  └─ remora.mjs  ← 短命进程，跑完即退
                       └─ pi Agent（@earendil-works/pi-agent-core，进程内）
                            ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
-                           ├─ tools：read/grep/find/ls（自写薄 AgentTool）
-                           ├─ beforeToolCall：READ_ONLY / WRITE 权限门      ← remora 注入
+                           ├─ tools：pi-coding-agent 工厂（read/grep/find/ls ± bash/edit/write） ← 规范依赖
+                           ├─ beforeToolCall：路径沙箱门（pi 不收口路径逃逸）      ← remora 注入
                            └─ pi-ai Model 字面量 → 任意 provider（含 OpenAI 兼容）
                  ↑ 进度走 stderr(NDJSON)，最终结果走 stdout
             └─ BashOutput / Monitor 读进度，KillShell 取消
@@ -88,15 +88,15 @@ plugins/remora/
 ├── scripts/
 │   └── remora.mjs                    # ★ esbuild bundle 产物（自包含 CLI，含 pi 库）
 └── _build/
-    ├── package.json    # 依赖 @earendil-works/pi-agent-core + pi-ai（pin 精确版本）
+    ├── package.json    # 依赖 @earendil-works/pi-agent-core + pi-ai + pi-coding-agent（pin 精确版本）
     ├── tsconfig.json
     ├── build.mjs       # esbuild：src/cli.ts → ../scripts/remora.mjs（bundle + minify）
     └── src/
         ├── cli.ts         # ★ CLI 入口：解析参数、从 stdin 读 task JSON、调 runtime、输出流
         ├── runtime.ts     # ★ 薄封装 pi Agent：装配 + 事件→stderr 桥接 + 结果整形
-        ├── tools.ts       # ★ AgentTool[]：read/grep/find/ls（阶段一只读；阶段二加 write/edit/bash）
-        ├── permissions.ts # ★ beforeToolCall 权限门（READ_ONLY / WRITE）
-        ├── config.ts      # ★ provider 配置 → 构造 pi-ai Model 字面量 + getApiKey
+        ├── tools.ts       # ★ buildTools：调 pi-coding-agent 工厂（read/grep/find/ls ± bash/edit/write）
+        ├── permissions.ts # ★ beforeToolCall 路径沙箱门（pi 的 resolveToCwd 只解析不收口）
+        ├── config.ts      # ★ provider 配置 → 构造 pi-ai Model 字面量 + buildModels（compaction 用）+ getApiKey
         └── session.ts     # ★ resume：AgentMessage[] 持久化到 .remora/sessions/（2MB 上限）
 ```
 
@@ -197,9 +197,9 @@ new Agent({ /* ... */, getApiKey: async () => readApiKey() });
 - API key 存于 macOS keychain（`security find-generic-password -s DASHSCOPE_API_KEY -w`，实测可读出 `sk-...`）。remora 既可从 `REMORA_API_KEY`（回退 `DASHSCOPE_API_KEY`）取，也支持 config `apiKey: "keychain:DASHSCOPE_API_KEY"` **直接读 keychain**（account 默认当前用户），**不落盘明文**。
 - function-calling、流式、重试、错误归类全部由 pi-ai 负责。**spike 已用打包后 bundle + 真实端点跑通**：`agent.prompt()` 正常返回、`agent_end` 触发、`errorMessage` 为空。
 
-### 5.3 `tools.ts` —— `AgentTool[]`（路线 B：自写）
+### 5.3 `tools.ts` —— `AgentTool[]`（路线 A：依赖 pi-coding-agent）
 
-pi 的 `AgentTool` 接口（`pi-agent-core` `types.ts`，**已核对真实签名**）：
+工具**不自写**——直接 `import` 上游 `@earendil-works/pi-coding-agent` 的工厂（规范 npm 依赖，esbuild bundle 进单文件，不 vendor、不抄袭源码）。pi 的 `AgentTool` 接口（`pi-agent-core` `types.ts`，**已核对真实签名**）：
 
 ```ts
 // Tool 基类来自 pi-ai：{ name, description, parameters: TSchema(typebox) }
@@ -211,47 +211,53 @@ interface AgentTool<TParams extends TSchema = TSchema, TDetails = any> extends T
     params: Static<TParams>,
     signal?: AbortSignal,
     onUpdate?: AgentToolUpdateCallback<TDetails>,
+    ctx: ExtensionContext,                    // pi 传入；remora 只用 execute 路径，不调 render，故 ctx 可空
   ) => Promise<AgentToolResult<TDetails>>;    // 失败时 throw，不要把错误编码进 content
   executionMode?: "sequential" | "parallel";
 }
 ```
 
-> 自写工具用 `typebox` 的 `Type.Object({...})` 定义 `parameters`（pi-ai 已 re-export `Type`/`TSchema`/`Static`）。`AgentToolResult = { content: (TextContent|ImageContent)[], details?, isError? }`。
+> **execute 路径无头可用（已核实）**：pi 工具的 `execute` 只走可插拔 `*Operations`（`ReadOperations`/`BashOperations`/`EditOperations`/`WriteOperations`，默认本地 fs/shell），所有 `ctx.*` 引用都在 `renderCall`/`renderResult`/`preparePreview` 等 UI 方法里——remora 进程内只消费 `AgentToolResult`，从不调 render，故 `ctx` 为 undefined 也能跑。
 
 **依赖路线（已定夺）**：
 
 | 路线 | 依赖 | 工具来源 | 结论 |
 | --- | --- | --- | --- |
-| A | `@earendil-works/pi-coding-agent` | `import` 现成 `createReadOnlyTools` 等工厂 | 备选；编译为 dist、Node 可用，但拖进 puppeteer/wasm/TUI 重依赖，bundle 体积大 |
-| **B（采用）** | 仅 `@earendil-works/pi-agent-core` + `pi-ai` | 自写薄 `AgentTool`（read/grep/find/ls，各几十行） | **初版采用**：依赖最轻、bundle 最小、契合"降低门槛" |
+| **A（采用）** | `@earendil-works/pi-coding-agent` | `import` 现成 `createReadOnlyTools` / `createBashTool` / `createEditTool` / `createWriteTool` 工厂 | **采用**：工具实现归上游、零自写；代价是 bundle 拖进 pi-tui/highlight.js/photon(wasm) 重依赖（见 §8.3） |
+| ~~B~~ | 仅 `pi-agent-core` + `pi-ai` | 自写薄 `AgentTool`（各几十行） | 弃用：自写工具与上游重复造轮、且丢失 pi 工具的成熟实现 |
 
-> **oh-my-pi 的工具为何不能用（已核实）**：`@oh-my-pi/pi-coding-agent` 是 bun-native（`main` 指向 `src/index.ts`、无 dist），工具源码首行即 `import { Database } from "bun:sqlite"`，并纠缠 `@oh-my-pi/pi-natives`（~55k 行 Rust）、puppeteer。Node/npm 无法加载，工具也无法单独摘出。故 oh-my-pi 工具一律**不导入**，需要其能力时只借鉴设计思路自写。
+> **oh-my-pi 的工具为何不能用（已核实）**：`@oh-my-pi/pi-coding-agent` 是 bun-native（`main` 指向 `src/index.ts`、无 dist），工具源码首行即 `import { Database } from "bun:sqlite"`，并纠缠 `@oh-my-pi/pi-natives`（~55k 行 Rust）、puppeteer。Node/npm 无法加载，工具也无法单独摘出。故 oh-my-pi 工具一律**不导入**。但**上游** `@earendil-works/pi-coding-agent` 是纯 Node（有 dist、依赖全是普通 npm 包、无 bun:sqlite/Rust），可正常作为依赖引入——这是 remora 走路线 A 的前提。
 
-初版工具集（read-only task 所需）：read / grep / find(glob) / ls，全部**自写**。`bash` 始终注册但在只读模式受白名单约束（见 5.4）。
+工具集（与 pi 的 `ToolName` 同名：`read / bash / edit / write / grep / find / ls`）：
 
-> **阶段二已落地**：新增自写 `write_file` / `edit_file` 工具，仅在 `--write` 时暴露；每次改动经自写的行级 LCS unified diff（`diff.ts`，无依赖）生成 `FileEdit{path,added,removed,diff}`，经 `onEdit` 回调汇总进 `TurnResult.edits`。`bash` 改为始终注册（只读模式由白名单收口），写模式放行任意命令。单次 `write_file` 上限 1 MiB，`bash` 输出上限 64 KiB、超时 120s。已用真实 DashScope 端点端到端验证：写模式自主 `edit_file` 修 bug + diff 正确、只读模式拒写、bash 元字符注入被拦。
+```ts
+import { createReadOnlyTools, createBashTool, createEditTool, createWriteTool } from "@earendil-works/pi-coding-agent";
+
+export function buildTools(cwd: string, opts: { write?: boolean } = {}) {
+  const readOnly = createReadOnlyTools(cwd);     // read / grep / find / ls（pi 预设，无 bash）
+  if (!opts.write) return readOnly;              // 只读模式：不注册 bash/edit/write
+  return [...readOnly, createBashTool(cwd), createEditTool(cwd), createWriteTool(cwd)];
+}
+```
+
+> **只读模式不挂 bash**：与 pi 的 `createReadOnlyTools` 一致——读模式只有 `read/grep/find/ls`，没有任何 shell 入口，因此**不再需要** remora 原先的"只读 bash 白名单 + 禁元字符"收口（已随 `permissions.ts` 精简一同移除）。写模式额外注册 `bash/edit/write`，`bash` 放行任意命令（用户已 `--write` opt-in）。路径沙箱由 `beforeToolCall` 单独收口（见 5.4）。
 
 ### 5.4 `permissions.ts` + `runtime.ts` —— 权限门与 turn 编排
 
 **权限门用 pi 的 `beforeToolCall` 钩子**：
 
 ```ts
-const MUTATING = new Set(["write_file", "edit_file"]);  // bash 不在此列：始终注册，靠白名单收口
-
-function makeBeforeToolCall(write: boolean, workspaceRoot: string) {
+function makeBeforeToolCall(workspaceRoot: string) {
+  const root = resolve(workspaceRoot);
   return async ({ toolCall, args }) => {
-    if (!write && MUTATING.has(toolCall.name))
-      return { block: true, reason: "permission denied: read-only mode" };
-    if (!write && toolCall.name === "bash" && !isReadOnlyCommand(args.command))
-      return { block: true, reason: "permission denied: non-readonly bash in read-only mode" };
-    if (args.path && escapesRoot(args.path, workspaceRoot))
-      return { block: true, reason: "permission denied: path escapes workspace root" };
+    if (typeof args.path === "string" && escapesRoot(args.path, root))
+      return { block: true, reason: "permission denied: path escapes the workspace root" };
   };
 }
 ```
 
 - `block: true` + `reason` 由 pi 自动转成 tool result 喂回模型（无需手写 loop 处理）。
-- read-only bash 收口 = **先拒绝 shell 元字符**（`; & | ` `$()` `{}` `<>` 换行——杜绝链式/替换/重定向绕过），**再**校验首词白名单（`ls/cat/grep/rg/find/git diff|log|status|show|blame/…`）。无法判定一律 block。写工具（write/edit）则整体不在只读模式注册。
+- **写工具不在只读模式注册**（`buildTools` 不挂 `bash/edit/write`），故权限门无需再做 write-gating 或 bash 白名单——这是结构性收口，比运行时拦截更可靠。门只保留**路径沙箱**：pi 的 `resolveToCwd` 只解析（`~/`、绝对、`../` 都不拒），`getCwdRelativePath` 仅用于显示检测逃逸、不阻止；remora 在此补上硬拦截。`bash` 在写模式下放行任意命令（opt-in），不在此门范围。
 
 **`runtime.ts` 编排一个 turn**：
 
@@ -262,33 +268,32 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
     initialState: {
       systemPrompt: opts.system,
       model: resolveModel(cfg),               // 构造 Model 字面量（见 5.2）
-      tools: buildTools(cwd),
+      tools: buildTools(cwd, { write: Boolean(opts.write) }),  // pi-coding-agent 工厂
       messages: opts.resumeId ? loadSession(cwd, opts.resumeId) : [],
     },
-    beforeToolCall: makeBeforeToolCall(Boolean(opts.write), cwd),
+    beforeToolCall: makeBeforeToolCall(cwd),  // 仅路径沙箱
     getApiKey: async () => readApiKey(cfg),   // ★ key 走这里注入，不放 Model 上
   });
 
-  const touched = new Set<string>();
-  agent.subscribe((ev) => {
-    if (ev.type === "tool_execution_start" && MUTATING.has(ev.toolName)) touched.add(ev.args.path);
-    opts.onProgress(bridgeEvent(ev));   // pi event → NDJSON 进度
-  });
+  agent.subscribe((ev) => opts.onProgress(bridgeEvent(ev)));   // pi event → NDJSON 进度
 
   await (opts.resumeId ? agent.continue() : agent.prompt(opts.prompt));
   saveSession(cwd, agent.state.messages);   // 持久化以支持下次 resume
   return {
     status: agent.state.errorMessage ? 1 : 0,
     finalMessage: extractFinalText(agent.state.messages),
-    touchedFiles: [...touched],
     errorMessage: agent.state.errorMessage ?? null,
   };
 }
 ```
 
+> `TurnResult` 不再带 `edits`/`touchedFiles`：pi 的 `write` 不产 diff、`read`/`bash` 大输出走 pi 的 `truncateHead`（截断，不外化）。这是"全面转向 pi 工具"的取舍——remora 不再自写 diff/artifact 封装层（`diff.ts`/`artifacts.ts`/`capture-output.ts` 已删除），结果只回 `finalMessage` + 错误状态。
+
 > `beforeToolCall` 的回调签名是 `({ assistantMessage, toolCall, args, context }, signal?) => Promise<{block?, reason?} | undefined>`（已核对）。`toolCall.name` 取工具名，`args` 是 schema 校验后的参数对象。`subscribe` 返回一个 unsub 函数。
 
-**上下文管理由 pi 负责**——流式、`transformContext` 压缩钩子均为 pi 内建。`pi-agent-core` 直接导出了一套 compaction 工具：`compact` / `shouldCompact` / `estimateContextTokens` / `generateSummary` / `DEFAULT_COMPACTION_SETTINGS` / `serializeConversation`（已核对导出）。**阶段三已接入**：注意 `compact`/`prepareCompaction` 走 `SessionTreeEntry[]`（会话树），而 remora 用扁平 `AgentMessage[]`；正好 `generateSummary(messages: AgentMessage[], model, reserveTokens, apiKey, …)` 基于扁平数组、匹配 `transformContext(messages, signal?)` 钩子签名。故 `compaction.ts` 用 `generateSummary` 而非 `compact`，避免引入会话树。这是相对手写方案最大的减负。
+**上下文管理由 pi 负责**——流式、`transformContext` 压缩钩子均为 pi 内建。`pi-agent-core` 直接导出了一套 compaction 工具：`compact` / `shouldCompact` / `estimateContextTokens` / `generateSummary` / `DEFAULT_COMPACTION_SETTINGS` / `serializeConversation`（已核对导出）。**阶段三已接入**：注意 `compact`/`prepareCompaction` 走 `SessionTreeEntry[]`（会话树），而 remora 用扁平 `AgentMessage[]`；正好 `generateSummary` 基于扁平数组、匹配 `transformContext(messages, signal?)` 钩子签名。故 `compaction.ts` 用 `generateSummary` 而非 `compact`，避免引入会话树。这是相对手写方案最大的减负。
+
+> **0.80.2 签名变更**：`generateSummary` 从 `(messages, model, reserveTokens, apiKey, …)` 改为 `(messages, models, model, reserveTokens, signal, …)`——不再收 `apiKey`，鉴权与流式改走 `Models` 注册表（`models.getAuth(model)` 取 key、`models.stream(model, …)` 发摘要请求）。Agent 自身仍用 `model` + `getApiKey` 路径（0.80.2 未变），但 `generateSummary` 要单独的 `Models`。故 `config.ts` 增 `buildModels(cfg, model)`：`createModels()` + `setProvider(createProvider({ id, baseUrl, auth: { apiKey: envApiKeyAuth(...) }, models:[model], api: { stream, streamSimple } }))`，stream 取自公开子路径 `@earendil-works/pi-ai/api/openai-completions`。key 若来自 keychain 则镜像进 `REMORA_API_KEY` env 供 `envApiKeyAuth` 解析。已功能验证：`getAuth(model)` 返回 `{auth:{apiKey}, source}` 正确。
 
 ### 5.5 `session.ts` —— 可 replay 的 JSONL session（pi repo + Claude Code 风格 resume）
 
@@ -327,32 +332,32 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 
 | 假设 | 结论 |
 | --- | --- |
-| npm 上有发布包、可 pin | ✅ `@earendil-works/pi-agent-core` / `pi-ai` 均 `0.79.4` latest（另有 `legacy-node20` tag）；`npm i @...@0.79.4` 成功（含传递依赖共 104 包） |
+| npm 上有发布包、可 pin | ✅ `@earendil-works/pi-agent-core` / `pi-ai` / `pi-coding-agent` 均 `0.80.2` latest（另有 `legacy-node20` tag）；`npm i @...@0.80.2` 成功（含传递依赖共 240 包） |
 | pi 包是 ESM + 有 dist + Node 可用 | ✅ 两包 `main: ./dist/index.js`、`exports` ESM、`engines.node >=22.19.0` |
 | `Agent` 构造/API 与设计一致 | ✅ `new Agent({initialState:{systemPrompt,model,tools,messages}, beforeToolCall, getApiKey})`；`agent.prompt()` / `agent.continue()` / `agent.subscribe()`(返回 unsub) / `agent.state.{messages,errorMessage}` 全部存在 |
 | 自定义 OpenAI 兼容端点接入方式 | ⚠️ **修正**：`getModel` 是两参注册表查表、**不能传 baseUrl/apiKey**。改为**直接构造 `Model` 字面量**（`api:"openai-completions"`+`baseUrl`），key 走 `Agent.getApiKey`。已实测可用 |
 | `beforeToolCall` 返回 `{block,reason}` 拦截 | ✅ 接口 `{block?:boolean, reason?:string}`，ctx 含 `{toolCall, args, assistantMessage, context}` |
 | `AgentTool` 签名 | ⚠️ **修正**：`execute(toolCallId, params, signal?, onUpdate?)`（首参是 toolCallId），且有必填 `label`；`Tool={name,description,parameters:TSchema}` |
-| esbuild bundle 成单文件可跑 | ✅ 2.36 MB 单文件；**需加 `createRequire` banner** 解决依赖里的 `require("process")`，否则运行时报 "Dynamic require not supported" |
+| esbuild bundle 成单文件可跑 | ✅ 单文件可跑（转向 pi 工具后 ~8.7 MB；**需加 `createRequire` banner** 解决依赖里的 `require("process")`，否则运行时报 "Dynamic require not supported" |
 | DashScope model id | ✅ `curl` 实测 `deepseek-v4-pro` 正常返回；`[1m]` 是 cx 命名约定，API 用裸 id |
 | 端到端 agent loop | ✅ 真实端点跑通 `agent.prompt()`，`agent_end` 触发、`errorMessage` 空、返回内容（含 thinking） |
 
-> **新增硬约束**：pi 0.79.x `engines.node >=22.19.0`。remora 的 `setup` 必须校验 Node 版本；低于 22.19 时引导用户升级，或退到 `legacy-node20` tag（0.74.2）。
+> **新增硬约束**：pi 0.80.x `engines.node >=22.19.0`。remora 的 `setup` 必须校验 Node 版本；低于 22.19 时引导用户升级，或退到 `legacy-node20` tag（0.74.2）。
 
 ## 8. 风险与已知局限
 
-1. **Node 版本门槛**。pi 0.79.x 要求 Node ≥ 22.19。**缓解**：setup 检测 + 提示；必要时 pin `legacy-node20`(0.74.2)。
+1. **Node 版本门槛**。pi 0.80.x 要求 Node ≥ 22.19。**缓解**：setup 检测 + 提示；必要时 pin `legacy-node20`(0.74.2)。
 2. **pi 库版本**。绑定 `@earendil-works/*`（仍快速迭代），API 可能变动。**缓解**：pin 精确版本（符合 supply-chain 规范），升级当作 reviewed change；接口收口在 `runtime.ts`/`config.ts` 隔离变化（自定义 Model 构造、getApiKey 注入都已收口）。
-3. **bundle 体积与 tree-shake**。单文件 2.36 MB——`pi-ai` 把 anthropic/google/mistral/aws 等 SDK 作为静态依赖拉入，当前未按 provider tree-shake。对插件分发可接受；要减重可改用 `@earendil-works/pi-ai/openai-completions` 子路径导入 + external 其余 SDK（阶段二优化项，非阻塞）。
+3. **bundle 体积（转向 pi 工具后显著增大）**。单文件 ~8.7 MB（原自写工具时 2.36 MB）。增量主因是 `@earendil-works/pi-coding-agent` 把工具与交互式 TUI 渲染器耦合——`edit.ts`/`write.ts` 顶层 `import` 了 `modes/interactive/...` 的 diff/theme 渲染，esbuild 无法 tree-shake，连带拉入 `pi-tui`、`highlight.js`、`@silvia-oddyer/photon-node`(wasm)。这些对 remora（只用 execute 路径、从不调 render）是死重，但 pi 的工具/渲染未解耦，无法在不 fork 的前提下剔除。**取舍**：为"全面转向 pi 工具、不自写"接受体积；强 `--external` 会破坏单文件自包含发布，暂不动。
 4. **"无第三方"是相对的**。去掉了用户手装的 CLI binary，但引入 pi 库依赖 + 一个 model API。门槛大幅降低（装插件即可），但依赖未归零。
-5. **弱模型表现**。非 Claude 模型若较弱，工具调用/编辑命中率可能差。**缓解**：借鉴 oh-my-pi 的 benchmaxxed read/edit 提示思路自写。
-6. **安全面**。`bash` 在 write 模式放行任意命令；read-only 靠白名单收口（无法判定即 block），文件操作限制在 workspace root 内。**pi 本身不内置权限沙箱**，`beforeToolCall` 是唯一软门，强隔离需靠容器。
-7. **大输出数据丢失（已修复）**。历史上 `bash` 输出 > 64 KiB、`read` 大文件直接硬截断丢数据。**已对齐 oh-my-pi 修复**：见 §5.5/`artifacts.ts`/`capture-output.ts`——超过阈值的完整输出外化到 session 同级目录的 artifact 文件（`<sessionDir>/<id>.<tool>.log`），LLM-facing 只保留 head + pointer(`artifact://<id>`) + tail，`read_file` 支持 `artifact://<id>` 回读。零数据丢失。
+5. **弱模型表现**。非 Claude 模型若较弱，工具调用/编辑命中率可能差。**缓解**：工具的 schema/描述直接用 pi 的成熟实现（含其 benchmaxxed 提示），remora 不再自写工具描述。
+6. **安全面**。`bash` 仅在 write 模式注册并放行任意命令（用户 `--write` opt-in）；**只读模式不挂 bash**（pi 的 `createReadOnlyTools` 无 bash），无 shell 入口。文件操作限制在 workspace root 内（`beforeToolCall` 路径沙箱；pi 的 `resolveToCwd` 只解析不收口）。**pi 本身不内置权限沙箱**，`beforeToolCall` 是唯一软门，强隔离需靠容器。
+7. **大输出截断（接受 pi 默认）**。pi 的 `read` 用 `truncateHead`、`bash` 同样截断超长输出——**会丢尾部数据**。这是"全面转向 pi 工具、不自写封装层"的明确取舍：remora 不再维护 `artifacts.ts`/`capture-output.ts` 的零丢失外化方案（已删除）。`read` 支持 `offset`/`limit` 分页续读，模型可主动翻页补全；`bash` 超长输出模型可重定向到文件再 `read` 分段。
 
 ## 9. 落地路径
 
-1. **阶段一（POC，read-only task）**：scaffold `plugins/remora/`，写 `cli.ts` + `config.ts` + `runtime.ts` + `tools.ts` + `permissions.ts`，仅依赖 `pi-agent-core` + `pi-ai`（路线 B）。bundle 链路与 API 已验证，直接落地：构造自定义 Model、getApiKey 注入 key、自写 read/grep/find/ls 薄工具、beforeToolCall 权限门、事件→stderr 桥接、stdout 结果契约。esbuild build 脚本带 `createRequire` banner。
-2. **阶段二（✅ 已完成，write task）**：自写 `write_file` / `edit_file` 工具 + WRITE 权限档 + 行级 unified diff 跟踪（`diff.ts` / `TurnResult.edits`），打通 `--write`；`bash` 改为始终注册、只读模式白名单收口（拒元字符 + 首词白名单）。已用真实端点端到端验证。bundle 减重（按 provider 子路径导入）评估为非阻塞,留待后续。
+1. **阶段一（POC，read-only task）**：scaffold `plugins/remora/`，写 `cli.ts` + `config.ts` + `runtime.ts` + `tools.ts` + `permissions.ts`，依赖 `pi-agent-core` + `pi-ai` + `pi-coding-agent`（路线 A）。bundle 链路与 API 已验证，直接落地：构造自定义 Model、getApiKey 注入 key、`buildTools` 调 pi 工厂、beforeToolCall 路径沙箱门、事件→stderr 桥接、stdout 结果契约。esbuild build 脚本带 `createRequire` banner。
+2. **阶段二（✅ 已完成，write task）**：`buildTools` 在 `--write` 时追加 `createBashTool`/`createEditTool`/`createWriteTool`（pi 工厂），打通 `--write`；只读模式不挂 bash（结构性收口，替代原白名单）。已用真实端点端到端验证。bundle 体积（~8.7 MB，pi-coding-agent 拖入 TUI 重依赖）评估为非阻塞，留待上游解耦工具/渲染后再减。
 3. **阶段三（✅ 已完成）**：`session.ts` resume（2MB 上限）+ `/remora:setup`（Node 版本 + provider 连通性探测）已在前期落地；本阶段补齐**上下文压缩**——`compaction.ts` 用 pi 的 `transformContext` 钩子接 `generateSummary`：低于 `shouldCompact` 阈值零开销返回原 messages（单轮 task 常态），超阈值则保留最近窗口（`keepRecentTokens`）、把中段历史压成一条摘要消息，`generateSummary` 失败降级为原样不崩。已用真实端点验证：600 条消息（~164k tokens）压成 74 条、低阈值不触发。同时修正 `session.ts` 里"保留 system 消息"的死注释（system 是 Agent 独立字段、不在 messages 数组内）。
 4. **阶段四（可选）**：借鉴 oh-my-pi 的哈希编辑 / benchmaxxed 提示思路自写增强。
 
@@ -363,11 +368,11 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 - [x] **命名 = `remora`**（䲟鱼，与鲨鲸共生、清理残屑的借喻）。
 - [x] **架构 = 无 daemon 单文件 CLI + subagent 编排**：不照搬 mimo 脚手架（无 server/HTTP/自造 job 系统）；异步追踪复用 Claude Code 的 background Bash / BashOutput / KillShell / Monitor。编排层是 `agents/remora-task.md` 子 agent + `skills/task/SKILL.md` 运行时契约（对齐 codex-plugin-cc 的 `codex-rescue` 模式）。
 - [x] **provider 接入 = 直接构造 `Model` 字面量**（不走 `getModel` 注册表），key 经 `Agent.getApiKey` 注入。已实测。
-- [x] **工具依赖路线 = B**：仅依赖 `pi-agent-core` + `pi-ai`，文件工具自写。oh-my-pi 工具经核实为 bun-native + Rust，不可导入；上游 `pi-coding-agent`（路线 A）作为写盘阶段备选。
+- [x] **工具依赖路线 = A**：依赖 `pi-agent-core` + `pi-ai` + `pi-coding-agent`，工具直接 `import` 上游工厂（不自写）。oh-my-pi 工具经核实为 bun-native + Rust，不可导入；**上游** `@earendil-works/pi-coding-agent` 是纯 Node（有 dist、无 bun/Rust），作为规范依赖引入。
 - [x] **POC endpoint = 百炼/DashScope**：`https://dashscope.aliyuncs.com/compatible-mode/v1`，model `deepseek-v4-pro`（实测裸 id 可用），key 取 keychain 的 `DASHSCOPE_API_KEY`。
-- [x] **pi 包版本 = pin `0.79.4`，手动更新**（不用 `^`/`~`）。要求 Node ≥ 22.19；低版本退 `legacy-node20`(0.74.2)。
+- [x] **pi 包版本 = pin `0.80.2`，手动更新**（不用 `^`/`~`）。要求 Node ≥ 22.19；低版本退 `legacy-node20`(0.74.2)。
 - [x] **能力范围 = 仅 `task`**：不做 review。命令面只有 `setup` / `task`。
-- [x] **发布形态 = esbuild bundle 单文件**（2.36 MB，带 `createRequire` banner，已验证可跑）。
+- [x] **发布形态 = esbuild bundle 单文件**（~8.7 MB，带 `createRequire` banner，已验证可跑）。
 - [x] **session 存储 = pi `JsonlSessionRepo` + Claude Code 风格**：复用上游 pi 自带的 JSONL session 体系（零新增依赖），集中存放于 `~/.remora/projects/<encoded-cwd>/<ts>_<id>.jsonl`；resume 用 `--continue`/`--resume <id>`（废弃 `--session`/`default` id），session-id 用 UUIDv4；entry 做到标准档（message/model_change/session_info/compaction）；用 `remora:lineage` custom entry 记录派生自宿主 CC 的 `CLAUDE_CODE_SESSION_ID`。旧的扁平 JSON + 2MB 丢消息方案废弃。
 
 > **依赖纪律已定**：只通过 npm 规范依赖上游发布包，不 vendor、不抄袭；底座先用上游 pi，oh-my-pi 留待后续按需引入其独立 npm 子包。
