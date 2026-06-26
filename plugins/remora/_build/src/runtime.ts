@@ -1,7 +1,7 @@
 import { type AgentMessage, Agent } from "@earendil-works/pi-agent-core";
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 
-import { loadConfig, resolveModel } from "./config.ts";
+import { buildModels, loadConfig, resolveModel } from "./config.ts";
 import { COMPACTED_SUMMARY, makeTransformContext } from "./compaction.ts";
 import { makeBeforeToolCall } from "./permissions.ts";
 import {
@@ -79,6 +79,7 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 	}
 
 	const model = resolveModel(cfg);
+	const models = buildModels(cfg, model);
 	const tools = buildTools(cwd, { write: Boolean(opts.write) });
 	const agent = new Agent({
 		initialState: {
@@ -90,7 +91,7 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 		beforeToolCall: makeBeforeToolCall(cwd),
 		transformContext: makeTransformContext(
 			model,
-			cfg.apiKey,
+			models,
 			(note) => opts.onProgress({ type: "compaction", detail: note }),
 			async (info) => {
 				await flush(info.summarized);
