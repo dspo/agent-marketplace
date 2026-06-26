@@ -113,7 +113,7 @@ API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `
 
 - 默认**只读**：不带 `--write` 时只挂 pi 的只读工具集 `read` / `grep` / `find` / `ls`，**不挂 `bash`**——与 pi 的 `createReadOnlyTools` 一致。
 - 带 `--write` 时额外开启 `bash` / `edit` / `write`，可改盘。工具实现直接来自 `@earendil-works/pi-coding-agent`（规范依赖，非自写）。
-- 所有文件操作限制在工作区根目录内，路径逃逸被 `beforeToolCall` 硬拦截（pi 的 `resolveToCwd` 只解析不收口，沙箱由 remora 注入）。
+- 所有文件操作限制在工作区根目录内，路径逃逸被 `beforeToolCall` 硬拦截：guard 先按 pi 的方式展开 `~/` 到 homedir、再 resolve，并对已存在路径做 `realpath`（防 in-root symlink 指向 root 外）。pi 的 `resolveToCwd` 只解析不收口，沙箱由 remora 注入。
 - pi 本身不内置权限沙箱，remora 的 `beforeToolCall` 是软门。`bash` 在写模式下放行任意命令；需要强隔离请在容器内运行。
 
 ## session 留痕

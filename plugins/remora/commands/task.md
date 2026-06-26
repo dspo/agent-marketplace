@@ -19,7 +19,7 @@ Execution mode:
 - If neither flag is present, default to foreground.
 - `--background` and `--wait` are execution flags for Claude Code. Do not forward them to the `task` CLI, and do not treat them as part of the natural-language task text.
 - `--model` is a runtime-selection flag. Preserve it for the forwarded `task` call, but do not treat it as part of the natural-language task text.
-- `--write` enables write mode in remora (allows file edits). Only forward it when the user explicitly asks remora to make changes.
+- `--write` enables write mode in remora (registers `bash`/`edit`/`write` tools). Only forward it when the user explicitly asks remora to make changes. **In write mode `bash` is unrestricted — there is no command sandbox; forwarding `--write` is equivalent to handing remora a shell.**
 
 Session routing:
 

@@ -194,7 +194,12 @@ export function resolveModel(cfg: ProviderConfig): Model<"openai-completions"> {
  * process).
  */
 export function buildModels(cfg: ProviderConfig, model: Model<"openai-completions">): Models {
-	if (cfg.apiKey && !process.env.REMORA_API_KEY) process.env.REMORA_API_KEY = cfg.apiKey;
+	// `envApiKeyAuth` resolves from env, so a key that came from the keychain
+	// (not env) must be mirrored into REMORA_API_KEY. Match loadConfig's `??`
+	// semantics: only mirror when the env var is truly unset (undefined), not
+	// when it's an empty string (which loadConfig would have rejected already).
+	// process-local — remora is a short-lived CLI.
+	if (cfg.apiKey && process.env.REMORA_API_KEY === undefined) process.env.REMORA_API_KEY = cfg.apiKey;
 	const models = createModels();
 	models.setProvider(
 		createProvider({
@@ -202,6 +207,12 @@ export function buildModels(cfg: ProviderConfig, model: Model<"openai-completion
 			baseUrl: cfg.baseUrl,
 			auth: { apiKey: envApiKeyAuth("remora", ["REMORA_API_KEY"]) },
 			models: [model],
+			// `as ProviderStreams` is a defensive cast. `satisfies ProviderStreams`
+			// also compiles today (TS 5.7 + pi-ai 0.80.2 — the Model<TApi> structure
+			// isn't strictly contravariant on `api`), but the stream fns are
+			// StreamFunction<"openai-completions"> while ProviderStreams.stream
+			// expects Model<Api>; the cast insulates against future pi-ai type
+			// tightening. Runtime dispatch is on model.api + baseUrl.
 			api: {
 				stream: streamOpenAICompletions,
 				streamSimple: streamSimpleOpenAICompletions,

@@ -65,7 +65,15 @@ export function makeTransformContext(
 		const toSummarize = messages.slice(0, keepFrom);
 		const recent = messages.slice(keepFrom);
 
-		const result = await generateSummary(toSummarize, models, model, settings.reserveTokens, signal);
+		let result: Awaited<ReturnType<typeof generateSummary>>;
+		try {
+			result = await generateSummary(toSummarize, models, model, settings.reserveTokens, signal);
+		} catch (err) {
+			// `transformContext` must not throw (pi's contract); a throw from the
+			// summary call would crash the turn. Degrade to no-compaction instead.
+			onNotice?.(`compaction skipped: ${String(err)}`);
+			return messages;
+		}
 		if (!result.ok) {
 			onNotice?.(`compaction skipped: ${result.error.message}`);
 			return messages;
