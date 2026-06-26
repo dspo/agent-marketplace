@@ -63,17 +63,17 @@ test("history format elides thinking by default, includes with opt", () => {
 test("dump format renders header + per-message blocks", () => {
 	const msgs: AgentMessage[] = [
 		user("do the thing"),
-		assistant([{ type: "toolCall", id: "c1", name: "search", arguments: { pattern: "TODO" } }]),
-		toolResult("c1", "search", "found TODOs"),
+		assistant([{ type: "toolCall", id: "c1", name: "grep", arguments: { pattern: "TODO" } }]),
+		toolResult("c1", "grep", "found TODOs"),
 	];
-	const out = formatSessionDumpText({ messages: msgs, systemPrompt: "you are remora", model: { provider: "dashscope", id: "qwen3.7-max" } as never, tools: [{ name: "search", description: "search" }] });
+	const out = formatSessionDumpText({ messages: msgs, systemPrompt: "you are remora", model: { provider: "dashscope", id: "qwen3.7-max" } as never, tools: [{ name: "grep", description: "search" }] });
 	assert.match(out, /## System Prompt/);
 	assert.match(out, /Model: dashscope\/qwen3\.7-max/);
 	assert.match(out, /## Available Tools/);
-	assert.match(out, /- \*\*search\*\*: search/);
+	assert.match(out, /- \*\*grep\*\*: search/);
 	assert.match(out, /## User/);
-	assert.match(out, /### Tool Call: search/);
-	assert.match(out, /### Tool Result: search/);
+	assert.match(out, /### Tool Call: grep/);
+	assert.match(out, /### Tool Result: grep/);
 	assert.match(out, /"pattern": "TODO"/);
 });
 

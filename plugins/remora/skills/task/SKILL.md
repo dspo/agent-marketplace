@@ -56,7 +56,7 @@ EOF
 - `--continue` / `-c` —— 在**当前 cwd 的最近一个 session** 上继续（追问、深入）。没有历史时等价于新建。
 - `--resume <id>` / `-r <id>` —— 续接指定的 session id（id 就是上一次结果里的 `sessionId`，或 stderr 进度流里 `session` 事件的 `id`）。
 - `--model <name>` —— 临时覆盖模型名（同一 provider 下切换）。
-- `--write` —— 允许 remora 写盘：开启 `write` / `edit_file` 工具，让它直接落地修复。不带此 flag 时为只读调查模式。**写模式有实际改盘副作用,仅在你确实想让 remora 动手修改时使用**；改动会以 unified diff 形式记在结果的 `edits` 字段里。
+- `--write` —— 允许 remora 写盘：额外开启 `bash` / `edit` / `write` 工具，让它直接落地修复。不带此 flag 时为只读调查模式（只有 `read` / `grep` / `find` / `ls`，无 `bash`）。**写模式有实际改盘副作用,仅在你确实想让 remora 动手修改时使用**。
 
 > 默认每次 task 都开一个**新 session**（新 UUID）。要"接着上一次聊"就用 `--continue`（省事）或 `--resume <上次的 sessionId>`（精确）——和 `claude -c` / `claude -r <id>` 一致。
 
@@ -70,15 +70,11 @@ EOF
     "sessionId": "f49ff3e6-…",    // 本次 session 的 UUID；下次 --resume <sessionId> 续接
     "sessionPath": "~/.remora/projects/…/<ts>_<id>.jsonl",
     "finalMessage": "...",        // remora 的最终回答（Markdown），这是给用户的核心交付
-    "touchedFiles": [],           // 写模式下触达的文件
-    "edits": [                    // 写模式下每次改动的 unified diff
-      { "path": "sum.js", "added": 1, "removed": 1, "diff": "--- sum.js\n+++ sum.js\n..." }
-    ],
     "errorMessage": null
   }
   ```
 
-  把 `finalMessage` 原样转达给用户（它是完整自包含的诊断/建议）。不要改写或加戏。写模式下还应把 `edits` 里的改动摘要呈现给用户(改了哪些文件、增删行数),让用户能 review remora 动了什么。若想接着上次继续，记下 `sessionId`，下次带 `--resume <sessionId>`。
+  把 `finalMessage` 原样转达给用户（它是完整自包含的诊断/建议）。不要改写或加戏。若想接着上次继续，记下 `sessionId`，下次带 `--resume <sessionId>`。
 
 - **stderr** 是 NDJSON 进度流，每行一个事件。**第一行总是** `{"type":"session","id":"…","path":"…"}`（后台跑时据此尽早拿到 sessionId，供后续 `--resume`）；其后是 `agent_start` / `turn_start` / `tool_start` / `tool_end` / `turn_end` / `agent_end`。用于 `BashOutput`/`Monitor` 观察进度，不要当结果解析。
 
@@ -115,9 +111,9 @@ API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `
 
 ## 安全模型
 
-- 默认**只读**：不带 `--write` 时只有 read/search/find/ls 工具，外加受白名单限制的 `bash`（只放行 `ls`/`cat`/`grep`/`git log|diff|status` 等调查类命令，任何含 `;`、`|`、`&`、`` ` ``、`$()` 等链式/替换字符的命令一律拒绝）。
-- 带 `--write` 时额外开启 `write` / `edit_file`，可改盘；改动记入 `edits`。单次写入上限 1 MiB。
-- 所有文件操作限制在工作区根目录内，路径逃逸被硬拦截。
+- 默认**只读**：不带 `--write` 时只挂 pi 的只读工具集 `read` / `grep` / `find` / `ls`，**不挂 `bash`**——与 pi 的 `createReadOnlyTools` 一致。
+- 带 `--write` 时额外开启 `bash` / `edit` / `write`，可改盘。工具实现直接来自 `@earendil-works/pi-coding-agent`（规范依赖，非自写）。
+- 所有文件操作限制在工作区根目录内，路径逃逸被 `beforeToolCall` 硬拦截（pi 的 `resolveToCwd` 只解析不收口，沙箱由 remora 注入）。
 - pi 本身不内置权限沙箱，remora 的 `beforeToolCall` 是软门。`bash` 在写模式下放行任意命令；需要强隔离请在容器内运行。
 
 ## session 留痕
