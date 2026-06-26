@@ -15,7 +15,7 @@ const MAX_ENTRIES = 1000;
 const MAX_WRITE_BYTES = 1024 * 1024;
 const BASH_TIMEOUT_MS = 120_000;
 const BASH_OUTPUT_CAP = 64 * 1024;
-/** Inline cap for read_file: over this → spill full file to an artifact, keep head+tail. */
+/** Inline cap for read: over this → spill full file to an artifact, keep head+tail. */
 const READ_INLINE_CAP = 64 * 1024;
 const SKIP_DIRS = new Set([".git", "node_modules", ".remora", "dist", "build", ".next", ".cache"]);
 
@@ -130,7 +130,7 @@ export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
 	const artifacts = opts.artifacts;
 
 	const read = tool({
-		name: "read_file",
+		name: "read",
 		label: "Read file",
 		description: "Read a UTF-8 text file within the workspace, or an `artifact://<id>` URL from a prior overflow. Large outputs are spilled to an artifact (head + pointer + tail).",
 		parameters: readParams,
@@ -149,7 +149,7 @@ export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
 			const content = buf.toString("utf8");
 			// Spill oversized files: keep a bounded head+tail inline, full bytes in an artifact.
 			if (artifacts && buf.byteLength > READ_INLINE_CAP) {
-				const res = await captureOutput(content, artifacts, { maxBytes: READ_INLINE_CAP, toolType: "read_file" });
+				const res = await captureOutput(content, artifacts, { maxBytes: READ_INLINE_CAP, toolType: "read" });
 				return text(res.text);
 			}
 			const slice = content.slice(0, MAX_READ_BYTES);
@@ -179,7 +179,7 @@ export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
 	});
 
 	const find = tool({
-		name: "find_files",
+		name: "find",
 		label: "Find files",
 		description: "Find files whose relative path matches a substring or *-glob.",
 		parameters: findParams,
@@ -195,7 +195,7 @@ export function buildTools(root: string, opts: ToolOptions = {}): AgentTool[] {
 	});
 
 	const grep = tool({
-		name: "grep",
+		name: "search",
 		label: "Search file contents",
 		description: "Search file contents by regular expression. Returns path:line:text matches.",
 		parameters: grepParams,
@@ -269,7 +269,7 @@ function makeBash(base: string, artifacts?: ArtifactManager): AgentTool {
 	});
 }
 
-/** Build the write-only mutating tools (write_file / edit_file). */
+/** Build the write-only mutating tools (write / edit_file). */
 function buildMutators(base: string, onEdit?: (edit: FileEdit) => void): AgentTool[] {
 	const report = (path: string, before: string, after: string): FileEdit => {
 		const edit = unifiedDiff(relative(base, path) || path, before, after);
@@ -278,7 +278,7 @@ function buildMutators(base: string, onEdit?: (edit: FileEdit) => void): AgentTo
 	};
 
 	const writeFile = tool({
-		name: "write_file",
+		name: "write",
 		label: "Write file",
 		description: "Create or overwrite a UTF-8 text file with the given full contents. Returns a unified diff.",
 		parameters: writeParams,

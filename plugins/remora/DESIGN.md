@@ -48,7 +48,7 @@ Claude Code（主 agent）
                  └─ remora.mjs  ← 短命进程，跑完即退
                       └─ pi Agent（@earendil-works/pi-agent-core，进程内）
                            ├─ ReAct 循环 / 事件流 / resume / compaction   ← pi 提供
-                           ├─ tools：read/grep/find/ls（自写薄 AgentTool）
+                           ├─ tools：read/search/find/ls（自写薄 AgentTool）
                            ├─ beforeToolCall：READ_ONLY / WRITE 权限门      ← remora 注入
                            └─ pi-ai Model 字面量 → 任意 provider（含 OpenAI 兼容）
                  ↑ 进度走 stderr(NDJSON)，最终结果走 stdout
@@ -94,7 +94,7 @@ plugins/remora/
     └── src/
         ├── cli.ts         # ★ CLI 入口：解析参数、从 stdin 读 task JSON、调 runtime、输出流
         ├── runtime.ts     # ★ 薄封装 pi Agent：装配 + 事件→stderr 桥接 + 结果整形
-        ├── tools.ts       # ★ AgentTool[]：read/grep/find/ls（阶段一只读；阶段二加 write/edit/bash）
+        ├── tools.ts       # ★ AgentTool[]：read/search/find/ls（阶段一只读；阶段二加 write/edit/bash）
         ├── permissions.ts # ★ beforeToolCall 权限门（READ_ONLY / WRITE）
         ├── config.ts      # ★ provider 配置 → 构造 pi-ai Model 字面量 + getApiKey
         └── session.ts     # ★ resume：AgentMessage[] 持久化到 .remora/sessions/（2MB 上限）
@@ -223,20 +223,20 @@ interface AgentTool<TParams extends TSchema = TSchema, TDetails = any> extends T
 | 路线 | 依赖 | 工具来源 | 结论 |
 | --- | --- | --- | --- |
 | A | `@earendil-works/pi-coding-agent` | `import` 现成 `createReadOnlyTools` 等工厂 | 备选；编译为 dist、Node 可用，但拖进 puppeteer/wasm/TUI 重依赖，bundle 体积大 |
-| **B（采用）** | 仅 `@earendil-works/pi-agent-core` + `pi-ai` | 自写薄 `AgentTool`（read/grep/find/ls，各几十行） | **初版采用**：依赖最轻、bundle 最小、契合"降低门槛" |
+| **B（采用）** | 仅 `@earendil-works/pi-agent-core` + `pi-ai` | 自写薄 `AgentTool`（read/search/find/ls，各几十行） | **初版采用**：依赖最轻、bundle 最小、契合"降低门槛" |
 
 > **oh-my-pi 的工具为何不能用（已核实）**：`@oh-my-pi/pi-coding-agent` 是 bun-native（`main` 指向 `src/index.ts`、无 dist），工具源码首行即 `import { Database } from "bun:sqlite"`，并纠缠 `@oh-my-pi/pi-natives`（~55k 行 Rust）、puppeteer。Node/npm 无法加载，工具也无法单独摘出。故 oh-my-pi 工具一律**不导入**，需要其能力时只借鉴设计思路自写。
 
-初版工具集（read-only task 所需）：read / grep / find(glob) / ls，全部**自写**。`bash` 始终注册但在只读模式受白名单约束（见 5.4）。
+初版工具集（read-only task 所需）：read / search / find(glob) / ls，全部**自写**。`bash` 始终注册但在只读模式受白名单约束（见 5.4）。
 
-> **阶段二已落地**：新增自写 `write_file` / `edit_file` 工具，仅在 `--write` 时暴露；每次改动经自写的行级 LCS unified diff（`diff.ts`，无依赖）生成 `FileEdit{path,added,removed,diff}`，经 `onEdit` 回调汇总进 `TurnResult.edits`。`bash` 改为始终注册（只读模式由白名单收口），写模式放行任意命令。单次 `write_file` 上限 1 MiB，`bash` 输出上限 64 KiB、超时 120s。已用真实 DashScope 端点端到端验证：写模式自主 `edit_file` 修 bug + diff 正确、只读模式拒写、bash 元字符注入被拦。
+> **阶段二已落地**：新增自写 `write` / `edit_file` 工具，仅在 `--write` 时暴露；每次改动经自写的行级 LCS unified diff（`diff.ts`，无依赖）生成 `FileEdit{path,added,removed,diff}`，经 `onEdit` 回调汇总进 `TurnResult.edits`。`bash` 改为始终注册（只读模式由白名单收口），写模式放行任意命令。单次 `write` 上限 1 MiB，`bash` 输出上限 64 KiB、超时 120s。已用真实 DashScope 端点端到端验证：写模式自主 `edit_file` 修 bug + diff 正确、只读模式拒写、bash 元字符注入被拦。
 
 ### 5.4 `permissions.ts` + `runtime.ts` —— 权限门与 turn 编排
 
 **权限门用 pi 的 `beforeToolCall` 钩子**：
 
 ```ts
-const MUTATING = new Set(["write_file", "edit_file"]);  // bash 不在此列：始终注册，靠白名单收口
+const MUTATING = new Set(["write", "edit_file"]);  // bash 不在此列：始终注册，靠白名单收口
 
 function makeBeforeToolCall(write: boolean, workspaceRoot: string) {
   return async ({ toolCall, args }) => {
@@ -347,12 +347,12 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 4. **"无第三方"是相对的**。去掉了用户手装的 CLI binary，但引入 pi 库依赖 + 一个 model API。门槛大幅降低（装插件即可），但依赖未归零。
 5. **弱模型表现**。非 Claude 模型若较弱，工具调用/编辑命中率可能差。**缓解**：借鉴 oh-my-pi 的 benchmaxxed read/edit 提示思路自写。
 6. **安全面**。`bash` 在 write 模式放行任意命令；read-only 靠白名单收口（无法判定即 block），文件操作限制在 workspace root 内。**pi 本身不内置权限沙箱**，`beforeToolCall` 是唯一软门，强隔离需靠容器。
-7. **大输出数据丢失（已修复）**。历史上 `bash` 输出 > 64 KiB、`read` 大文件直接硬截断丢数据。**已对齐 oh-my-pi 修复**：见 §5.5/`artifacts.ts`/`capture-output.ts`——超过阈值的完整输出外化到 session 同级目录的 artifact 文件（`<sessionDir>/<id>.<tool>.log`），LLM-facing 只保留 head + pointer(`artifact://<id>`) + tail，`read_file` 支持 `artifact://<id>` 回读。零数据丢失。
+7. **大输出数据丢失（已修复）**。历史上 `bash` 输出 > 64 KiB、`read` 大文件直接硬截断丢数据。**已对齐 oh-my-pi 修复**：见 §5.5/`artifacts.ts`/`capture-output.ts`——超过阈值的完整输出外化到 session 同级目录的 artifact 文件（`<sessionDir>/<id>.<tool>.log`），LLM-facing 只保留 head + pointer(`artifact://<id>`) + tail，`read` 支持 `artifact://<id>` 回读。零数据丢失。
 
 ## 9. 落地路径
 
-1. **阶段一（POC，read-only task）**：scaffold `plugins/remora/`，写 `cli.ts` + `config.ts` + `runtime.ts` + `tools.ts` + `permissions.ts`，仅依赖 `pi-agent-core` + `pi-ai`（路线 B）。bundle 链路与 API 已验证，直接落地：构造自定义 Model、getApiKey 注入 key、自写 read/grep/find/ls 薄工具、beforeToolCall 权限门、事件→stderr 桥接、stdout 结果契约。esbuild build 脚本带 `createRequire` banner。
-2. **阶段二（✅ 已完成，write task）**：自写 `write_file` / `edit_file` 工具 + WRITE 权限档 + 行级 unified diff 跟踪（`diff.ts` / `TurnResult.edits`），打通 `--write`；`bash` 改为始终注册、只读模式白名单收口（拒元字符 + 首词白名单）。已用真实端点端到端验证。bundle 减重（按 provider 子路径导入）评估为非阻塞,留待后续。
+1. **阶段一（POC，read-only task）**：scaffold `plugins/remora/`，写 `cli.ts` + `config.ts` + `runtime.ts` + `tools.ts` + `permissions.ts`，仅依赖 `pi-agent-core` + `pi-ai`（路线 B）。bundle 链路与 API 已验证，直接落地：构造自定义 Model、getApiKey 注入 key、自写 read/search/find/ls 薄工具、beforeToolCall 权限门、事件→stderr 桥接、stdout 结果契约。esbuild build 脚本带 `createRequire` banner。
+2. **阶段二（✅ 已完成，write task）**：自写 `write` / `edit_file` 工具 + WRITE 权限档 + 行级 unified diff 跟踪（`diff.ts` / `TurnResult.edits`），打通 `--write`；`bash` 改为始终注册、只读模式白名单收口（拒元字符 + 首词白名单）。已用真实端点端到端验证。bundle 减重（按 provider 子路径导入）评估为非阻塞,留待后续。
 3. **阶段三（✅ 已完成）**：`session.ts` resume（2MB 上限）+ `/remora:setup`（Node 版本 + provider 连通性探测）已在前期落地；本阶段补齐**上下文压缩**——`compaction.ts` 用 pi 的 `transformContext` 钩子接 `generateSummary`：低于 `shouldCompact` 阈值零开销返回原 messages（单轮 task 常态），超阈值则保留最近窗口（`keepRecentTokens`）、把中段历史压成一条摘要消息，`generateSummary` 失败降级为原样不崩。已用真实端点验证：600 条消息（~164k tokens）压成 74 条、低阈值不触发。同时修正 `session.ts` 里"保留 system 消息"的死注释（system 是 Agent 独立字段、不在 messages 数组内）。
 4. **阶段四（可选）**：借鉴 oh-my-pi 的哈希编辑 / benchmaxxed 提示思路自写增强。
 

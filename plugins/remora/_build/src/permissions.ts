@@ -6,7 +6,7 @@ import type { BeforeToolCallContext, BeforeToolCallResult } from "@earendil-work
  * Tools that write to disk. Unavailable in read-only mode. `bash` is NOT here:
  * it is always registered and gated by the read-only command whitelist below.
  */
-export const MUTATING_TOOLS = new Set(["write_file", "edit_file"]);
+export const MUTATING_TOOLS = new Set(["write", "edit_file"]);
 
 /** Shell metacharacters that enable chaining/substitution; reject before whitelisting. */
 const SHELL_METACHARS = /[;&|`$(){}<>\n\r]/;

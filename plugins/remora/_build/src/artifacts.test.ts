@@ -40,7 +40,7 @@ test("ArtifactManager saves, numbers sequentially, reads back", async () => {
 test("ArtifactManager resumes numbering from existing files", async () => {
 	const dir = tmpDir();
 	writeFileSync(join(dir, "0.bash.log"), "a");
-	writeFileSync(join(dir, "2.read_file.log"), "b");
+	writeFileSync(join(dir, "2.read.log"), "b");
 	const am = new ArtifactManager(dir);
 	const id = await am.save("c", "bash"); // should be 3
 	assert.equal(id, "3");
@@ -78,7 +78,7 @@ test("captureOutput head/tail do not overlap for small line counts", async () =>
 	// not duplicate the middle: it takes head only (no tail) in this regime.
 	const body = `onlyline\n`;
 	const huge = `${"x".repeat(DEFAULT_OUTPUT_CAP_BYTES)}${body}`;
-	const res = await captureOutput(huge, am, { maxBytes: 1024, toolType: "read_file", headLines: 4000, tailLines: 4000 });
+	const res = await captureOutput(huge, am, { maxBytes: 1024, toolType: "read", headLines: 4000, tailLines: 4000 });
 	assert.equal(res.truncated, true);
 	// "onlyline" appears exactly once (no doubled middle).
 	const occurrences = (res.text.match(/onlyline/g) ?? []).length;

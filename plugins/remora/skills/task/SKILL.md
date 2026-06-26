@@ -56,7 +56,7 @@ EOF
 - `--continue` / `-c` —— 在**当前 cwd 的最近一个 session** 上继续（追问、深入）。没有历史时等价于新建。
 - `--resume <id>` / `-r <id>` —— 续接指定的 session id（id 就是上一次结果里的 `sessionId`，或 stderr 进度流里 `session` 事件的 `id`）。
 - `--model <name>` —— 临时覆盖模型名（同一 provider 下切换）。
-- `--write` —— 允许 remora 写盘：开启 `write_file` / `edit_file` 工具，让它直接落地修复。不带此 flag 时为只读调查模式。**写模式有实际改盘副作用,仅在你确实想让 remora 动手修改时使用**；改动会以 unified diff 形式记在结果的 `edits` 字段里。
+- `--write` —— 允许 remora 写盘：开启 `write` / `edit_file` 工具，让它直接落地修复。不带此 flag 时为只读调查模式。**写模式有实际改盘副作用,仅在你确实想让 remora 动手修改时使用**；改动会以 unified diff 形式记在结果的 `edits` 字段里。
 
 > 默认每次 task 都开一个**新 session**（新 UUID）。要"接着上一次聊"就用 `--continue`（省事）或 `--resume <上次的 sessionId>`（精确）——和 `claude -c` / `claude -r <id>` 一致。
 
@@ -115,8 +115,8 @@ API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `
 
 ## 安全模型
 
-- 默认**只读**：不带 `--write` 时只有 read/grep/find/ls 工具，外加受白名单限制的 `bash`（只放行 `ls`/`cat`/`grep`/`git log|diff|status` 等调查类命令，任何含 `;`、`|`、`&`、`` ` ``、`$()` 等链式/替换字符的命令一律拒绝）。
-- 带 `--write` 时额外开启 `write_file` / `edit_file`，可改盘；改动记入 `edits`。单次写入上限 1 MiB。
+- 默认**只读**：不带 `--write` 时只有 read/search/find/ls 工具，外加受白名单限制的 `bash`（只放行 `ls`/`cat`/`grep`/`git log|diff|status` 等调查类命令，任何含 `;`、`|`、`&`、`` ` ``、`$()` 等链式/替换字符的命令一律拒绝）。
+- 带 `--write` 时额外开启 `write` / `edit_file`，可改盘；改动记入 `edits`。单次写入上限 1 MiB。
 - 所有文件操作限制在工作区根目录内，路径逃逸被硬拦截。
 - pi 本身不内置权限沙箱，remora 的 `beforeToolCall` 是软门。`bash` 在写模式下放行任意命令；需要强隔离请在容器内运行。
 

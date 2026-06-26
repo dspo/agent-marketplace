@@ -30,7 +30,7 @@ export class ArtifactManager {
 	private dirCreated = false;
 	private initialized = false;
 	/**
-	 * Initialization in-flight promise. `read_file` runs in parallel (pi's agent
+	 * Initialization in-flight promise. `read` runs in parallel (pi's agent
 	 * loop uses Promise.all over a message's tool calls), so multiple callers can
 	 * hit `ensureDir` concurrently before the first finishes — without this guard
 	 * they'd each scan existing ids from the same fs state and collide on nextId.

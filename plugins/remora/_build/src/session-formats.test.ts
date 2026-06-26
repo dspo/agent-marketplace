@@ -26,16 +26,16 @@ test("history format collapses tool call + result into one line", () => {
 		user("find the bug"),
 		assistant([
 			{ type: "text", text: "Reading the file..." },
-			{ type: "toolCall", id: "c1", name: "read_file", arguments: { path: "src/cli.ts", limit: 50 } },
+			{ type: "toolCall", id: "c1", name: "read", arguments: { path: "src/cli.ts", limit: 50 } },
 		]),
-		toolResult("c1", "read_file", "line1\nline2\nline3"),
+		toolResult("c1", "read", "line1\nline2\nline3"),
 	];
 	const out = formatSessionHistoryMarkdown(msgs);
 	assert.match(out, /## user/);
 	assert.match(out, /find the bug/);
 	assert.match(out, /## assistant/);
 	assert.match(out, /Reading the file\.\.\./);
-	assert.match(out, /→ read_file\(src\/cli\.ts\) ⇒ ok · 3 lines/);
+	assert.match(out, /→ read\(src\/cli\.ts\) ⇒ ok · 3 lines/);
 });
 
 test("history format renders tool errors", () => {
@@ -63,17 +63,17 @@ test("history format elides thinking by default, includes with opt", () => {
 test("dump format renders header + per-message blocks", () => {
 	const msgs: AgentMessage[] = [
 		user("do the thing"),
-		assistant([{ type: "toolCall", id: "c1", name: "grep", arguments: { pattern: "TODO" } }]),
-		toolResult("c1", "grep", "found TODOs"),
+		assistant([{ type: "toolCall", id: "c1", name: "search", arguments: { pattern: "TODO" } }]),
+		toolResult("c1", "search", "found TODOs"),
 	];
-	const out = formatSessionDumpText({ messages: msgs, systemPrompt: "you are remora", model: { provider: "dashscope", id: "qwen3.7-max" } as never, tools: [{ name: "grep", description: "search" }] });
+	const out = formatSessionDumpText({ messages: msgs, systemPrompt: "you are remora", model: { provider: "dashscope", id: "qwen3.7-max" } as never, tools: [{ name: "search", description: "search" }] });
 	assert.match(out, /## System Prompt/);
 	assert.match(out, /Model: dashscope\/qwen3\.7-max/);
 	assert.match(out, /## Available Tools/);
-	assert.match(out, /- \*\*grep\*\*: search/);
+	assert.match(out, /- \*\*search\*\*: search/);
 	assert.match(out, /## User/);
-	assert.match(out, /### Tool Call: grep/);
-	assert.match(out, /### Tool Result: grep/);
+	assert.match(out, /### Tool Call: search/);
+	assert.match(out, /### Tool Result: search/);
 	assert.match(out, /"pattern": "TODO"/);
 });
 
