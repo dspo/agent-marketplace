@@ -1,6 +1,6 @@
 {
   "name": "remora",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Self-contained task agent with embedded pi agent harness, using non-Claude models for cross-validation and second opinions.",
   "author": {
     "name": "Agent Skills",
