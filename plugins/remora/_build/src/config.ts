@@ -238,9 +238,9 @@ export function buildModels(cfg: ProviderConfig, model: Model<"openai-completion
 
 /**
  * Minimal flat YAML parser for remora config files. Supports:
- *   - `key: value` pairs (string, number, boolean)
+ *   - `key: value` pairs (string, number, boolean, null)
  *   - quoted string values (`key: "value"`, `key: 'value'`)
- *   - `#` line comments
+ *   - `#` line comments and inline comments (`key: value  # comment`)
  *   - blank lines
  *
  * Does NOT support: nested mappings, sequences, multiline values, anchors,
@@ -255,11 +255,33 @@ export function parseSimpleYaml(raw: string): Record<string, unknown> {
 		const colonIdx = trimmed.indexOf(":");
 		if (colonIdx === -1) continue;
 		const key = trimmed.slice(0, colonIdx).trim();
-		const rawValue = trimmed.slice(colonIdx + 1).trim();
+		let rawValue = trimmed.slice(colonIdx + 1).trim();
 		if (!rawValue) continue; // empty value → skip
+		// Strip inline comments for unquoted values.
+		// In YAML, `#` is a comment only when preceded by whitespace (or at line
+		// start). Quoted values are exempt — `#` inside quotes is literal.
+		if (!isQuotedScalar(rawValue)) {
+			rawValue = stripInlineComment(rawValue).trim();
+			if (!rawValue) continue; // value was comment-only, e.g. `key: # comment`
+		}
 		result[key] = parseYamlValue(rawValue);
 	}
 	return result;
+}
+
+/** Whether a value starts and ends with matching quotes (→ exempt from comment stripping). */
+function isQuotedScalar(v: string): boolean {
+	return v.length >= 2 && (
+		(v.startsWith('"') && v.endsWith('"')) ||
+		(v.startsWith("'") && v.endsWith("'"))
+	);
+}
+
+/** Remove a trailing ` # comment` from an unquoted YAML scalar. */
+function stripInlineComment(v: string): string {
+	if (v.startsWith("#")) return ""; // comment-only value
+	const match = v.search(/\s#/); // whitespace followed by #
+	return match === -1 ? v : v.slice(0, match);
 }
 
 /** Parse a single YAML scalar value. */
@@ -268,6 +290,8 @@ function parseYamlValue(v: string): unknown {
 	if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
 		return v.slice(1, -1);
 	}
+	// null (YAML 1.2 null tokens)
+	if (v === "null" || v === "~" || v === "Null" || v === "NULL") return null;
 	// Booleans
 	if (v === "true") return true;
 	if (v === "false") return false;

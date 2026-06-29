@@ -119,7 +119,7 @@ API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `
 
 remora 像一个正经 agent 一样，把每次会话记成一条**可 replay 的 JSONL**（底层直接用 pi 自带的 `JsonlSessionRepo`，与 oh-my-pi 同源），而不是把消息数组塞进一个扁平 JSON。
 
-- **位置**：集中存放在 `~/.pi/agent/sessions/<encoded-cwd>/` 下（与 Pi 共用同一目录结构——`pi --session` 可直接恢复 remora session），每个 session 一个 `{ISO时间戳}_{sessionId}.jsonl`，可被 `REMORA_SESSIONS_DIR` 覆盖根目录。**不再**写入项目内的 `.remora/sessions/`。
+- **位置**：集中存放在 `~/.pi/agent/sessions/<encoded-cwd>/` 下（与 Pi 共用同一目录结构——`pi --session` 可直接恢复 remora session），每个 session 一个 `{ISO时间戳}_{sessionId}.jsonl`，可被 `REMORA_SESSIONS_DIR` 覆盖根目录。**不再**写入项目内的 `.remora/sessions/`。旧 `~/.remora/projects/` 下的 session 需手动迁移到新位置（目录结构相同，直接 `mv`）。
 - **格式**：首行是 session 头 `{type:"session", version:3, id, timestamp, cwd}`；其后每行一个 typed entry：
   - `message` —— 每条 user/assistant/tool 消息，**增量追加**（逐条原子写入，跑挂了已落盘的不丢）。
   - `model_change` —— 起始时记一次 provider/model。

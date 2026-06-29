@@ -306,6 +306,8 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 
 **存储布局**（与 Pi 共用目录）：集中存放在 `~/.pi/agent/sessions/<encoded-cwd>/` 下（`encoded-cwd` 由 pi 的 `encodeCwd` 即 `--<cwd 中 /\:→->--` 生成），每 session 一个 `{ISO时间戳}_{sessionId}.jsonl`；`REMORA_SESSIONS_DIR` 可覆盖根目录。**与 Pi 完全共用同一目录结构**——`pi --session` 可直接恢复 remora session。session 创建时写入 `customType: "remora:agent"` custom entry 标记来源，以便在 Pi 的 resume 界面中区分 remora vs pi session。**不再**写入项目内 `.remora/sessions/`，旧的扁平 JSON + 2MB 丢消息方案已废弃。
 
+> **迁移**：旧的 `~/.remora/projects/` 下已有 session 需手动移到 `~/.pi/agent/sessions/`，旧 `~/.remora/blobs/` 移到 `~/.pi/remora/blobs/`。目录结构相同（都用 `encodeCwd`），直接 `mv` 即可。
+
 **resume 命令面**（Claude Code 风格）：`--continue`/`-c`（当前 cwd 最近一个）、`--resume <id>`/`-r <id>`（指定 session）。**废弃** 旧的 `--session <name>` 与 `"default"` 字符串 id；新 session 总是拿一个 UUIDv4（`node:crypto.randomUUID()`）。turn 结果与 stderr 进度流都带 sessionId，主 agent 据此续接——对齐 Claude Code `--output-format json` 返 `session_id` 的用法。
 
 **entry 完整度**（标准档）：`message`（每条消息，**引用集合幂等 + 增量追加**；compaction 时由回调先把被摘要的原始消息落盘再记 `compaction` entry，跑挂了已落盘的不丢）、`model_change`（起始记 provider/model）、`session_info`（首条 prompt 派生 title）、`compaction`（`transformContext` 真正压缩时记，带**精确的** `firstKeptEntryId`——= 第一个被保留消息的 entry id，由 load 时建立的 `WeakMap<message, entryId>` 在压缩回调里查出；resume 时 `loadMessages` 按 pi `buildSessionContext` 同款语义切片：drop 掉该 compaction entry 之前、`firstKeptEntryId` 之前的全部 message，前插一条 synthetic summary，保留其后的 recent tail + compaction entry 之后的新消息，精确重建 `[summary, ...recent]`。`firstKeptEntryId=""` 退化成"从 session 起点全部摘要"——当被保留的首条消息是本 turn 新消息、尚无 entry id 时才出现，语义仍正确）、`custom`(`remora:lineage`，见下)。多轮 compaction 由"取最后一条 compaction entry"保证正确（每条 summary 已吸收到它为止的历史）。`loadAllMessages`（dump 用）读**全部**原始 message entry 不切片，供人工复盘看完整 transcript。
