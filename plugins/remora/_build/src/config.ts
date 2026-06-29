@@ -40,6 +40,15 @@ interface ConfigFile {
 	maxTokens?: number;
 }
 
+function readYamlIfExists(path: string): ConfigFile | undefined {
+	try {
+		const raw = readFileSync(path, "utf8");
+		return parseSimpleYaml(raw) as ConfigFile;
+	} catch {
+		return undefined;
+	}
+}
+
 function readJsonIfExists(path: string): ConfigFile | undefined {
 	try {
 		return JSON.parse(readFileSync(path, "utf8")) as ConfigFile;
@@ -51,24 +60,29 @@ function readJsonIfExists(path: string): ConfigFile | undefined {
 /**
  * Load provider config. Precedence (high → low):
  *   1. env (REMORA_BASE_URL / REMORA_MODEL / REMORA_API_KEY) + modelOverride
- *   2. workspace .remora/config.json
- *   3. global ~/.remora/config.json
+ *   2. workspace .remora/config.json (legacy, still supported)
+ *   3. global ~/.pi/remora.config.yaml (new unified location)
+ *   4. global ~/.remora/config.json (legacy fallback)
+ *
+ * Spread order means later objects override earlier ones, so the effective
+ * priority for any single field is: env > workspace > ~/.pi yaml > ~/.remora json.
  */
 export function loadConfig(cwd: string, modelOverride?: string): ProviderConfig {
-	const global = readJsonIfExists(join(homedir(), ".remora", "config.json"));
-	const workspace = readJsonIfExists(join(cwd, ".remora", "config.json"));
-	const file: ConfigFile = { ...global, ...workspace };
+	const legacyGlobal = readJsonIfExists(join(homedir(), ".remora", "config.json"));
+	const piYaml = readYamlIfExists(join(homedir(), ".pi", "remora.config.yaml"));
+	const legacyWorkspace = readJsonIfExists(join(cwd, ".remora", "config.json"));
+	const file: ConfigFile = { ...legacyGlobal, ...piYaml, ...legacyWorkspace };
 
 	const baseUrl = process.env.REMORA_BASE_URL ?? file.baseUrl;
 	const model = modelOverride ?? process.env.REMORA_MODEL ?? file.model;
-	if (!baseUrl) throw new Error("missing provider baseUrl: set REMORA_BASE_URL or .remora/config.json");
-	if (!model) throw new Error("missing model: set REMORA_MODEL or .remora/config.json");
+	if (!baseUrl) throw new Error("missing provider baseUrl: set REMORA_BASE_URL or ~/.pi/remora.config.yaml");
+	if (!model) throw new Error("missing model: set REMORA_MODEL or ~/.pi/remora.config.yaml");
 
 	const apiKey = resolveApiKey(file);
 	if (!apiKey) {
 		const spec = file.apiKey ?? file.apiKeyEnv;
 		const hint = spec ? ` or set config apiKey="${spec}"` : "";
-		throw new Error(`missing api key: set $REMORA_API_KEY${hint}, or use apiKey "keychain:SERVICE" / "env:VAR" in .remora/config.json`);
+		throw new Error(`missing api key: set $REMORA_API_KEY${hint}, or use apiKey "keychain:SERVICE" / "env:VAR" in ~/.pi/remora.config.yaml`);
 	}
 
 	return {
@@ -220,4 +234,70 @@ export function buildModels(cfg: ProviderConfig, model: Model<"openai-completion
 		}),
 	);
 	return models;
+}
+
+/**
+ * Minimal flat YAML parser for remora config files. Supports:
+ *   - `key: value` pairs (string, number, boolean, null)
+ *   - quoted string values (`key: "value"`, `key: 'value'`)
+ *   - `#` line comments and inline comments (`key: value  # comment`)
+ *   - blank lines
+ *
+ * Does NOT support: nested mappings, sequences, multiline values, anchors,
+ * tags, or any advanced YAML features. This is intentionally limited — remora's
+ * config is a flat key-value file with ~6 fields.
+ */
+export function parseSimpleYaml(raw: string): Record<string, unknown> {
+	const result: Record<string, unknown> = {};
+	for (const line of raw.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#")) continue;
+		const colonIdx = trimmed.indexOf(":");
+		if (colonIdx === -1) continue;
+		const key = trimmed.slice(0, colonIdx).trim();
+		let rawValue = trimmed.slice(colonIdx + 1).trim();
+		if (!rawValue) continue; // empty value → skip
+		// Strip inline comments for unquoted values.
+		// In YAML, `#` is a comment only when preceded by whitespace (or at line
+		// start). Quoted values are exempt — `#` inside quotes is literal.
+		if (!isQuotedScalar(rawValue)) {
+			rawValue = stripInlineComment(rawValue).trim();
+			if (!rawValue) continue; // value was comment-only, e.g. `key: # comment`
+		}
+		result[key] = parseYamlValue(rawValue);
+	}
+	return result;
+}
+
+/** Whether a value starts and ends with matching quotes (→ exempt from comment stripping). */
+function isQuotedScalar(v: string): boolean {
+	return v.length >= 2 && (
+		(v.startsWith('"') && v.endsWith('"')) ||
+		(v.startsWith("'") && v.endsWith("'"))
+	);
+}
+
+/** Remove a trailing ` # comment` from an unquoted YAML scalar. */
+function stripInlineComment(v: string): string {
+	if (v.startsWith("#")) return ""; // comment-only value
+	const match = v.search(/\s#/); // whitespace followed by #
+	return match === -1 ? v : v.slice(0, match);
+}
+
+/** Parse a single YAML scalar value. */
+function parseYamlValue(v: string): unknown {
+	// Quoted strings: strip quotes, keep as-is (no unescaping needed for remora config)
+	if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+		return v.slice(1, -1);
+	}
+	// null (YAML 1.2 null tokens)
+	if (v === "null" || v === "~" || v === "Null" || v === "NULL") return null;
+	// Booleans
+	if (v === "true") return true;
+	if (v === "false") return false;
+	// Numbers (integers and decimals)
+	if (/^-?\d+$/.test(v)) return Number.parseInt(v, 10);
+	if (/^-?\d+\.\d+$/.test(v)) return Number.parseFloat(v);
+	// Unquoted string (the default YAML scalar)
+	return v;
 }

@@ -97,7 +97,7 @@ plugins/remora/
         ├── tools.ts       # ★ buildTools：调 pi-coding-agent 工厂（read/grep/find/ls ± bash/edit/write）
         ├── permissions.ts # ★ beforeToolCall 路径沙箱门（pi 的 resolveToCwd 只解析不收口）
         ├── config.ts      # ★ provider 配置 → 构造 pi-ai Model 字面量 + buildModels（compaction 用）+ getApiKey
-        └── session.ts     # ★ resume：AgentMessage[] 持久化到 .remora/sessions/（2MB 上限）
+        └── session.ts     # ★ resume：AgentMessage[] 持久化到 ~/.pi/agent/sessions/（与 Pi 共用目录）
 ```
 
 > **不移植 mimo 的**：`server-lifecycle`、`mimo-client`、`tracked-jobs`、`job-control`、`state`、HTTP 层、`schemas/`（review）、`prompts/`（review 模板）、stop-review-gate hook。remora 只做 task，且不需要 job 基础设施。
@@ -148,8 +148,9 @@ async function main() {
 
 配置来源（优先级从高到低）：
 1. 命令行 `--model` / 环境变量 `REMORA_BASE_URL` / `REMORA_API_KEY` / `REMORA_MODEL`
-2. workspace 配置：`.remora/config.json`（由 `/remora:setup` 写入）
-3. 全局配置：`~/.remora/config.json`
+2. workspace 配置：`.remora/config.json`（legacy，仍支持）
+3. 全局配置：`~/.pi/remora.config.yaml`（新统一位置）
+4. 全局 legacy：`~/.remora/config.json`（向后兼容）
 
 > **已验证的关键事实（spike 实测）**：pi-ai 的 `getModel(provider, modelId)` 只接受**两个参数**，且是对静态注册表 `MODELS.generated.ts` 的**强类型查表**——**不接受 baseUrl/apiKey，也不接受表外的任意 model id**。自定义 OpenAI 兼容端点（DashScope 等）不在注册表里，**走不通 `getModel`**。
 >
@@ -303,7 +304,9 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 - `Session` 类：`appendMessage` / `appendModelChange` / `appendCompaction` / `appendSessionName` / `appendCustomEntry` 等方法；`buildContext()` 按 entry 重建 `AgentMessage[]`（resume 时应用 compaction entry）。
 - `NodeExecutionEnv`（`@earendil-works/pi-agent-core/node` 子路径）：Node 上的 `FileSystem` 实现，喂给 `JsonlSessionRepo`。
 
-**存储布局**（Claude Code 风格）：集中存放在 `~/.remora/projects/<encoded-cwd>/` 下（`encoded-cwd` 由 pi 的 `encodeCwd` 即 `--<cwd 中 /\:→->--` 生成），每 session 一个 `{ISO时间戳}_{sessionId}.jsonl`；`REMORA_SESSIONS_DIR` 可覆盖根目录。**不再**写入项目内 `.remora/sessions/`，旧的扁平 JSON + 2MB 丢消息方案已废弃。
+**存储布局**（与 Pi 共用目录）：集中存放在 `~/.pi/agent/sessions/<encoded-cwd>/` 下（`encoded-cwd` 由 pi 的 `encodeCwd` 即 `--<cwd 中 /\:→->--` 生成），每 session 一个 `{ISO时间戳}_{sessionId}.jsonl`；`REMORA_SESSIONS_DIR` 可覆盖根目录。**与 Pi 完全共用同一目录结构**——`pi --session` 可直接恢复 remora session。session 创建时写入 `customType: "remora:agent"` custom entry 标记来源，以便在 Pi 的 resume 界面中区分 remora vs pi session。**不再**写入项目内 `.remora/sessions/`，旧的扁平 JSON + 2MB 丢消息方案已废弃。
+
+> **迁移**：旧的 `~/.remora/projects/` 下已有 session 需手动移到 `~/.pi/agent/sessions/`，旧 `~/.remora/blobs/` 移到 `~/.pi/remora/blobs/`。目录结构相同（都用 `encodeCwd`），直接 `mv` 即可。
 
 **resume 命令面**（Claude Code 风格）：`--continue`/`-c`（当前 cwd 最近一个）、`--resume <id>`/`-r <id>`（指定 session）。**废弃** 旧的 `--session <name>` 与 `"default"` 字符串 id；新 session 总是拿一个 UUIDv4（`node:crypto.randomUUID()`）。turn 结果与 stderr 进度流都带 sessionId，主 agent 据此续接——对齐 Claude Code `--output-format json` 返 `session_id` 的用法。
 
@@ -311,13 +314,13 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 
 **记录宿主 Claude Code session id**：remora 是 Claude Code spawn 的子进程，CC 给子进程注入 `CLAUDE_CODE_SESSION_ID`（UUIDv4，已实测）。新建 session 时用 `appendCustomEntry("remora:lineage", { claudeCodeSessionId })` 记下 parent CC session（pi 的 custom entry 是"扩展私有数据"的官方逃生口，不占用 header 的 `parentSessionPath` 字段——后者语义是 parent session 文件路径，与"一个 CC session id"不符）。CC 外手动跑时该 env 不存在则跳过；resume 同一 session 不重复记。
 
-> **持久化保护 = 截断 + Blob 外化**（对齐 oh-my-pi）：`prepareForPersistence` 递归处理每条消息——(1) `content` 数组里 base64 ≥ 1 KiB 的图片块外化到内容寻址 blob store（`~/.remora/blobs/<sha256>`，SHA-256 over raw bytes，自动去重），JSONL 里只存 `blob:sha256:<hash>` 引用；(2) `image_url` data URL 同理外化；(3) 其余 > 500 000 字符的字符串截断（带 `[truncated]` 标记，crypto 签名字段清空而非截断）。blob 写同步落盘（page cache）后才写引用它的 JSONL 行——OOM/SIGKILL 不会留悬空 ref。**读路径**（`loadMessages`）在 resume 时把 `blob:` ref 还原回 base64/data URL，blob 缺失则优雅降级（保留 ref 字符串）。见 `blob-store.ts`。
+> **持久化保护 = 截断 + Blob 外化**（对齐 oh-my-pi）：`prepareForPersistence` 递归处理每条消息——(1) `content` 数组里 base64 ≥ 1 KiB 的图片块外化到内容寻址 blob store（`~/.pi/remora/blobs/<sha256>`，SHA-256 over raw bytes，自动去重），JSONL 里只存 `blob:sha256:<hash>` 引用；(2) `image_url` data URL 同理外化；(3) 其余 > 500 000 字符的字符串截断（带 `[truncated]` 标记，crypto 签名字段清空而非截断）。blob 写同步落盘（page cache）后才写引用它的 JSONL 行——OOM/SIGKILL 不会留悬空 ref。**读路径**（`loadMessages`）在 resume 时把 `blob:` ref 还原回 base64/data URL，blob 缺失则优雅降级（保留 ref 字符串）。见 `blob-store.ts`。
 
 ## 6. 命令面
 
 | 命令 | 行为 |
 | --- | --- |
-| `/remora:setup` | 检查 Node 版本 + 校验 `REMORA_*` / `.remora/config.json` + 用 pi-ai 试发一次最小请求验证连通性与鉴权 |
+| `/remora:setup` | 检查 Node 版本 + 校验 `REMORA_*` / `~/.pi/remora.config.yaml` / `.remora/config.json` + 用 pi-ai 试发一次最小请求验证连通性与鉴权 |
 | `/remora:task` | 触发 task skill（打包上下文 → 调 CLI → 读结果） |
 
 > 不再需要 `status` / `result` / `cancel` 命令——这些在 mimo 里是自造 job 系统的查询接口。remora 复用 Claude Code 的 background-shell：进度看 `BashOutput`、取消用 `KillShell`，无需插件自己实现。
@@ -373,7 +376,7 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 - [x] **pi 包版本 = pin `0.80.2`，手动更新**（不用 `^`/`~`）。要求 Node ≥ 22.19；低版本退 `legacy-node20`(0.74.2)。
 - [x] **能力范围 = 仅 `task`**：不做 review。命令面只有 `setup` / `task`。
 - [x] **发布形态 = esbuild bundle 单文件**（~8.7 MB，带 `createRequire` banner，已验证可跑）。
-- [x] **session 存储 = pi `JsonlSessionRepo` + Claude Code 风格**：复用上游 pi 自带的 JSONL session 体系（零新增依赖），集中存放于 `~/.remora/projects/<encoded-cwd>/<ts>_<id>.jsonl`；resume 用 `--continue`/`--resume <id>`（废弃 `--session`/`default` id），session-id 用 UUIDv4；entry 做到标准档（message/model_change/session_info/compaction）；用 `remora:lineage` custom entry 记录派生自宿主 CC 的 `CLAUDE_CODE_SESSION_ID`。旧的扁平 JSON + 2MB 丢消息方案废弃。
+- [x] **session 存储 = pi `JsonlSessionRepo` + 与 Pi 共用目录**：复用上游 pi 自带的 JSONL session 体系（零新增依赖），集中存放于 `~/.pi/agent/sessions/<encoded-cwd>/<ts>_<id>.jsonl`（与 Pi 完全共用同一目录，`pi --session` 可直接恢复 remora session）；resume 用 `--continue`/`--resume <id>`（废弃 `--session`/`default` id），session-id 用 UUIDv4；entry 做到标准档（message/model_change/session_info/compaction）；用 `remora:agent` custom entry 标记来源，`remora:lineage` custom entry 记录派生自宿主 CC 的 `CLAUDE_CODE_SESSION_ID`。旧的扁平 JSON + 2MB 丢消息方案废弃。
 
 > **依赖纪律已定**：只通过 npm 规范依赖上游发布包，不 vendor、不抄袭；底座先用上游 pi，oh-my-pi 留待后续按需引入其独立 npm 子包。
 

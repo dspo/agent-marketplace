@@ -111,7 +111,7 @@ function readTitle(path: string): string | undefined {
 }
 
 function newRepo(cwd: string): JsonlSessionRepo {
-	const sessionsRoot = process.env.REMORA_SESSIONS_DIR ?? join(homedir(), ".remora", "projects");
+	const sessionsRoot = process.env.REMORA_SESSIONS_DIR ?? join(homedir(), ".pi", "agent", "sessions");
 	return new JsonlSessionRepo({ fs: new NodeExecutionEnv({ cwd }), sessionsRoot });
 }
 

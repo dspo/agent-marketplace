@@ -10,9 +10,9 @@ export const BLOB_PREFIX = "blob:sha256:";
 /** Minimum base64 length (≈0.75 KiB) to bother externalizing — skip tiny inline images. */
 export const BLOB_EXTERNALIZE_THRESHOLD = 1024;
 
-/** Root dir for blobs: lives under remora's global `~/.remora/`, overridable. */
+/** Root dir for blobs: lives under `~/.pi/remora/`, overridable. */
 export function blobsDir(): string {
-	return process.env.REMORA_BLOBS_DIR ?? join(homedir(), ".remora", "blobs");
+	return process.env.REMORA_BLOBS_DIR ?? join(homedir(), ".pi", "remora", "blobs");
 }
 
 export interface BlobPutResult {
