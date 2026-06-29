@@ -6,6 +6,7 @@ import { COMPACTED_SUMMARY, makeTransformContext } from "./compaction.ts";
 import { makeBeforeToolCall } from "./permissions.ts";
 import {
 	appendActiveToolsChangeEntry,
+	appendAgentEntry,
 	appendCompactionEntry,
 	appendLineageEntry,
 	appendMessageEntry,
@@ -118,6 +119,7 @@ export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnRe
 	});
 
 	if (isNew) {
+		await appendAgentEntry(session);
 		await appendLineageEntry(session);
 		await appendModelChangeEntry(session, cfg.provider, cfg.model);
 		await appendActiveToolsChangeEntry(session, tools.map((t) => t.name));

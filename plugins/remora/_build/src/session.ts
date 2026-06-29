@@ -37,13 +37,13 @@ const TRUNCATION_NOTICE = "\n\n[remora: session content truncated]";
 export type ResumeMode = "new" | "continue" | "id";
 
 /**
- * Sessions root: centralized under the global `~/.remora` dir (consistent with
- * remora's own `~/.remora/config.json`), overridable via `REMORA_SESSIONS_DIR`.
+ * Sessions root: shared with Pi's `~/.pi/agent/sessions/` so that `pi --session`
+ * can resume a remora session. Overridable via `REMORA_SESSIONS_DIR`.
  * The per-cwd subdir below this is named by pi's `JsonlSessionRepo.encodeCwd`
  * (`--<cwd with /\:→->--`).
  */
 export function sessionsRoot(): string {
-	return process.env.REMORA_SESSIONS_DIR ?? join(homedir(), ".remora", "projects");
+	return process.env.REMORA_SESSIONS_DIR ?? join(homedir(), ".pi", "agent", "sessions");
 }
 
 function newRepo(cwd: string): JsonlSessionRepo {
@@ -267,6 +267,15 @@ export function appendActiveToolsChangeEntry(
 export function appendTitleEntry(session: Session<JsonlSessionMetadata>, firstPrompt: string): Promise<string> | undefined {
 	const title = deriveTitle(firstPrompt);
 	return title ? session.appendSessionName(title) : undefined;
+}
+
+/** Record that this session was created by remora, so pi's resume can distinguish the source.
+ * Uses pi's native `custom` entry mechanism — zero monkey-patching needed.
+ */
+export function appendAgentEntry(
+	session: Session<JsonlSessionMetadata>,
+): Promise<string> {
+	return session.appendCustomEntry("remora:agent", "remora");
 }
 
 /**

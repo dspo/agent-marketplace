@@ -68,7 +68,7 @@ EOF
   {
     "status": 0,                  // 0 成功 / 非 0 失败
     "sessionId": "f49ff3e6-…",    // 本次 session 的 UUID；下次 --resume <sessionId> 续接
-    "sessionPath": "~/.remora/projects/…/<ts>_<id>.jsonl",
+    "sessionPath": "~/.pi/agent/sessions/…/<ts>_<id>.jsonl",
     "finalMessage": "...",        // remora 的最终回答（Markdown），这是给用户的核心交付
     "errorMessage": null
   }
@@ -87,18 +87,17 @@ CLI 非零退出时，stderr 末行是一个 `{"type":"error","message":"..."}` 
 ## 配置来源（优先级高 → 低）
 
 1. 环境变量：`REMORA_BASE_URL` / `REMORA_MODEL` / `REMORA_API_KEY`
-2. 工作区：`.remora/config.json`
-3. 全局：`~/.remora/config.json`
+2. 工作区：`.remora/config.json`（legacy，仍支持）
+3. 全局：`~/.pi/remora.config.yaml`（新统一位置，YAML 格式）
+4. 全局 legacy：`~/.remora/config.json`（向后兼容）
 
-`.remora/config.json` 示例：
+`~/.pi/remora.config.yaml` 示例：
 
-```jsonc
-{
-  "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  "model": "deepseek-v4-pro",
-  "provider": "dashscope",
-  "apiKey": "keychain:DASHSCOPE_API_KEY"   // 来源 spec，见下
-}
+```yaml
+baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model: "deepseek-v4-pro"
+provider: "dashscope"
+apiKey: "keychain:DASHSCOPE_API_KEY"
 ```
 
 `apiKey` 是一个**来源 spec 字符串**，声明 key 从哪取：
@@ -120,12 +119,13 @@ API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `
 
 remora 像一个正经 agent 一样，把每次会话记成一条**可 replay 的 JSONL**（底层直接用 pi 自带的 `JsonlSessionRepo`，与 oh-my-pi 同源），而不是把消息数组塞进一个扁平 JSON。
 
-- **位置**：集中存放在 `~/.remora/projects/<encoded-cwd>/` 下（`encoded-cwd` 由 pi 按 cwd 编码），每个 session 一个 `{ISO时间戳}_{sessionId}.jsonl`，可被 `REMORA_SESSIONS_DIR` 覆盖根目录。**不再**写入项目内的 `.remora/sessions/`。
+- **位置**：集中存放在 `~/.pi/agent/sessions/<encoded-cwd>/` 下（与 Pi 共用同一目录结构——`pi --session` 可直接恢复 remora session），每个 session 一个 `{ISO时间戳}_{sessionId}.jsonl`，可被 `REMORA_SESSIONS_DIR` 覆盖根目录。**不再**写入项目内的 `.remora/sessions/`。
 - **格式**：首行是 session 头 `{type:"session", version:3, id, timestamp, cwd}`；其后每行一个 typed entry：
   - `message` —— 每条 user/assistant/tool 消息，**增量追加**（逐条原子写入，跑挂了已落盘的不丢）。
   - `model_change` —— 起始时记一次 provider/model。
   - `session_info` —— 从首条 prompt 派生的自动 title。
   - `compaction` —— 上下文真正压缩时记一条（含 summary / tokensBefore），resume 时由 pi 重建为摘要。
+  - `custom`(`remora:agent`) —— 标记**本 session 由 remora 创建**（值 `"remora"`），以便 Pi 的 resume 界面中区分 remora vs pi session。
   - `custom`(`remora:lineage`) —— 记录**派生这次 task 的宿主 Claude Code session id**（取自 `CLAUDE_CODE_SESSION_ID`），建立可追溯链；remora 在 CC 外手动跑时该 entry 不写。
 - **resume**：`--continue` 取该 cwd 最近一个；`--resume <id>` 取指定 id；续接时读回历史 entry 重建 `AgentMessage[]`，新轮次消息继续增量追加（不重写整个文件）。
-- **大图外化**：图片 block 的 base64（≥1 KiB）不塞进 JSONL，而是落到内容寻址 blob store（`~/.remora/blobs/<sha256>`，自动去重），JSONL 里只存 `blob:sha256:<hash>` 引用——resume 时自动还原回 base64（对齐 oh-my-pi）。
+- **大图外化**：图片 block 的 base64（≥1 KiB）不塞进 JSONL，而是落到内容寻址 blob store（`~/.pi/remora/blobs/<sha256>`，自动去重），JSONL 里只存 `blob:sha256:<hash>` 引用——resume 时自动还原回 base64（对齐 oh-my-pi）。

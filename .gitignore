@@ -6,7 +6,8 @@ plugins/mimo/_build/node_modules/
 plugins/mimo/_build/tests/.build/
 plugins/remora/_build/node_modules/
 
-# remora runtime state (config + per-session history), user-local
+# remora runtime state lives under ~/.pi/ (sessions: ~/.pi/agent/sessions/, config: ~/.pi/remora.config.yaml, blobs: ~/.pi/remora/blobs/).
+# Legacy workspace .remora/ dirs may still exist locally (old flat-JSON sessions/config) — keep ignoring them.
 .remora/
 
 # OS files
