@@ -1,7 +1,7 @@
 {
   "name": "remora-plugins",
   "interface": {
-    "displayName": "Agent Skills"
+    "displayName": "Remora Plugins"
   },
   "plugins": [
     {
@@ -34,6 +34,19 @@
       "source": {
         "source": "local",
         "path": "./plugins/playwright-cli"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "mimo",
+      "description": "MiMo programming assistant — code review, task delegation, and stop-gate review",
+      "source": {
+        "source": "local",
+        "path": "./plugins/mimo"
       },
       "policy": {
         "installation": "AVAILABLE",
