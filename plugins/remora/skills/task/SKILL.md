@@ -41,7 +41,9 @@ remora 是一个**自包含单文件 CLI**（`scripts/remora.mjs`，pi 库已打
 
 task JSON 通过 **stdin** 传入（用 heredoc），不经过 shell argv，天然免转义、不落盘：
 
-**前台（短任务，推荐默认）** —— 直接读结果：
+一次 task 会驱动一个完整的非 Claude agent 跑多轮 LLM，**通常要几分钟**，常常超过单次前台 `Bash` 调用的超时上限。前台直跑会在 remora 完成前超时。因此**默认用后台 + 轮询**：
+
+**后台 + 轮询（推荐默认）** —— 用 `run_in_background: true` 启动，再用 `BashOutput` 反复轮询同一个 shell 直到进程退出，然后从最终 stdout 读结果：
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" task <<'EOF'
@@ -49,7 +51,9 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" task <<'EOF'
 EOF
 ```
 
-**后台（长任务）** —— 用 `run_in_background` 跑同一命令，再用 `BashOutput` 轮询进度、`KillShell` 取消。
+持续轮询直至完成——跑 10 分钟以上也属正常，不要提前放弃、更不要把「仍在运行」之类进度文本当结果返回。需要中途取消用 `KillShell`。
+
+**前台** —— 仅用于你确知会在秒级返回的极短任务；否则一律用后台 + 轮询。
 
 可选 flag（resume 采用 Claude Code 风格）：
 
