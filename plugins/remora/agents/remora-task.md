@@ -45,7 +45,7 @@ Hard rules on what you return:
 
 Interrupted-run fallback:
 
-- The very first line of remora's stderr is always `{"type":"session","id":"…","path":"…"}`. If your background shell is lost or your turn is interrupted before the process exits, you may recover the already-persisted result once with a single `node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" sessions dump <id>` using that `id`, and return its final message. This is the only permitted use of `sessions`.
+- The very first line of remora's stderr is always `{"type":"session","id":"…","path":"…"}`. If your background shell is lost or your turn is interrupted before the process exits, you may recover the already-persisted result once with a single `node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" dump <id>` using that `id`, and return its final message. This is the only permitted command other than `task`.
 
 Response style:
 

@@ -27,7 +27,7 @@ Raw arguments: `$ARGUMENTS`
 3. **Invoke remora for the adversarial pass**:
    - Spawn `remora:remora-task` via the `Agent` tool. Do NOT call `Skill(remora:task)` or `Skill(remora:remora-task)`. Do NOT pass `--write`.
    - Give remora the full context **plus your initial verdict**, and ask it to review from an opposing, nitpicking angle and return its own mergeable/not-mergeable verdict with reasons.
-   - remora is long-running (minutes). Its result is its real `finalMessage` — never a "still running" placeholder. If the spawned subagent returns a placeholder instead of remora's actual conclusion, treat that as a tooling failure: recover remora's real output before proceeding (its stdout JSON `finalMessage`, or `sessions dump <id>` using the sessionId from the stderr `session` event), or invoke the remora CLI directly with background + `BashOutput` polling.
+   - remora is long-running (minutes). Its result is its real `finalMessage` — never a "still running" placeholder. If the spawned subagent returns a placeholder instead of remora's actual conclusion, treat that as a tooling failure: recover remora's real output before proceeding (its stdout JSON `finalMessage`, or `dump <id>` using the sessionId from the stderr `session` event), or invoke the remora CLI directly with background + `BashOutput` polling.
 
 4. **Adversarial loop**:
    - Read remora's `finalMessage` carefully.

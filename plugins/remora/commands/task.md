@@ -47,7 +47,7 @@ Operating rules:
 - The subagent is a thin forwarder only. Because a remora `task` is long-running (it drives a full non-Claude agent through many LLM turns, often several minutes, past the single-call `Bash` timeout ceiling), the subagent starts remora with `run_in_background: true` and polls it with `BashOutput` until the process exits, then returns the `finalMessage` field from the stdout JSON as-is.
 - Return remora's `finalMessage` verbatim to the user.
 - Do not paraphrase, summarize, rewrite, or add commentary before or after it.
-- The subagent must **never** surface a placeholder or progress line ("Waiting for remora…", "still running", etc.) as the result — if remora has not finished, it keeps polling. The only follow-up work it may do is polling the background shell it started (plus the interrupted-run `sessions dump <id>` fallback). It must not inspect files, reason through the problem, or do work of its own.
+- The subagent must **never** surface a placeholder or progress line ("Waiting for remora…", "still running", etc.) as the result — if remora has not finished, it keeps polling. The only follow-up work it may do is polling the background shell it started (plus the interrupted-run `dump <id>` fallback). It must not inspect files, reason through the problem, or do work of its own.
 - Leave `--model` unset unless the user explicitly asks for one.
 - Treat `--continue`, `--resume <id>`, and `--model <value>` as routing controls and do not include them in the task text you pass through.
 - If remora fails (non-zero exit), tell the user to run `/remora:setup` to check provider configuration.
