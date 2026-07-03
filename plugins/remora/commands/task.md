@@ -1,6 +1,6 @@
 ---
-description: 把卡住的问题委托给 remora task agent（自包含、非 Claude 第二意见）
-argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [--write] [要 remora 调查或解决的问题]"
+description: Delegate a stuck problem to the remora task agent (self-contained, non-Claude second opinion)
+argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [--write] [problem for remora to investigate or solve]"
 allowed-tools: Bash(node:*), AskUserQuestion, Agent
 ---
 
@@ -44,10 +44,10 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" sessions list
 
 Operating rules:
 
-- The subagent is a thin forwarder only. It should use one `Bash` call to invoke `node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" task` with the task JSON fed via stdin (heredoc), and return the `finalMessage` field from the stdout JSON as-is.
+- The subagent is a thin forwarder only. Because a remora `task` is long-running (it drives a full non-Claude agent through many LLM turns, often several minutes, past the single-call `Bash` timeout ceiling), the subagent starts remora with `run_in_background: true` and polls it with `BashOutput` until the process exits, then returns the `finalMessage` field from the stdout JSON as-is.
 - Return remora's `finalMessage` verbatim to the user.
 - Do not paraphrase, summarize, rewrite, or add commentary before or after it.
-- Do not ask the subagent to inspect files, monitor progress, poll output, fetch results, cancel jobs, summarize output, or do follow-up work of its own.
+- The subagent must **never** surface a placeholder or progress line ("Waiting for remora…", "still running", etc.) as the result — if remora has not finished, it keeps polling. The only follow-up work it may do is polling the background shell it started (plus the interrupted-run `dump <id>` fallback). It must not inspect files, reason through the problem, or do work of its own.
 - Leave `--model` unset unless the user explicitly asks for one.
 - Treat `--continue`, `--resume <id>`, and `--model <value>` as routing controls and do not include them in the task text you pass through.
 - If remora fails (non-zero exit), tell the user to run `/remora:setup` to check provider configuration.
