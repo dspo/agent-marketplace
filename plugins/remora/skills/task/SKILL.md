@@ -61,7 +61,8 @@ EOF
 ```
 
 Poll until it exits — a 10+ minute run is normal. Do NOT give up early, and NEVER return a
-progress line ("still running") as the result. Use `KillShell` to cancel.
+progress line ("still running") as the result. (Cancellation, if ever needed, is the command
+layer's job via `KillShell` — not something the forwarding subagent does.)
 
 **Foreground** — only for tasks you know finish in seconds; otherwise always background + poll.
 
