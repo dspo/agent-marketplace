@@ -1,101 +1,121 @@
 ---
 name: task
-description: 把卡住的问题委托给 remora —— 一个自包含的非 Claude task agent，做交叉验证与第二意见。无须安装第三方 CLI，只需配置一个 model endpoint。
+description: Delegate a stuck problem to remora — a self-contained, non-Claude task agent for cross-verification and second opinions. No third-party CLI to install; just configure one model endpoint.
 user-invocable: false
 ---
 
 # remora task runtime contract
 
-> This skill is the internal runtime contract for the `remora:remora-task` subagent.
-> It is not user-invocable — the subagent reads it to know how to build the task JSON
-> and invoke the remora CLI.
+> Internal runtime contract for the `remora:remora-task` subagent. Not user-invocable — the
+> subagent reads this to build the task JSON and drive the remora CLI.
 
-当 `remora:remora-task` 子 agent 收到一个 task 请求时，按本契约把请求打包成 task JSON、调起 CLI、返回结果。remora 内嵌 pi agent harness，用一个**非 Claude 模型**（如 DeepSeek/Qwen 等任意 OpenAI 兼容端点）独立调查、交叉验证、跳出思维定势。
+When `remora:remora-task` receives a task, package the request into task JSON, run the CLI, and
+return the result. remora embeds the pi agent harness and runs a **non-Claude model** (any
+OpenAI-compatible endpoint, e.g. DeepSeek/Qwen) to investigate independently and cross-check.
 
-remora 是一个**自包含单文件 CLI**（`scripts/remora.mjs`，pi 库已打包进去）。它不是常驻服务，每次 task 就是一次短命进程：跑完即退。异步追踪、取消、进度全部复用 Claude Code 既有的 background-shell 能力。
+remora is a **self-contained single-file CLI** (`scripts/remora.mjs`, pi bundled in). Not a
+daemon — each task is one short-lived process. Async tracking, cancel, and progress reuse Claude
+Code's own background-shell tools.
 
-## 前置条件
+## Prerequisites
 
-- Node.js ≥ 22.19（pi 底座要求）。
-- 配置一个 OpenAI 兼容的 model endpoint，运行 `/remora:setup` 校验连通性。
+- Node.js ≥ 22.19 (pi requirement).
+- An OpenAI-compatible model endpoint configured; run `/remora:setup` to verify.
 
-## 使用流程
+## Steps
 
-### 1. 把上下文组织成 task JSON
+### 1. Build the task JSON
 
-把卡住的问题表示成一个 JSON 对象（**不落盘**，下一步直接从 stdin 喂给 CLI）。字段：
+Represent the stuck problem as one JSON object (**never write it to disk** — pipe it via stdin in
+the next step). Fields:
 
 ```jsonc
 {
-  "prompt": "（必填）你要 remora 做什么，一句话说清楚",
-  "problem": "（可选）现象/报错的具体描述",
-  "files": ["（可选）相关文件路径，相对工作区根"],
-  "attempted": "（可选）你已经试过哪些方案、为什么没成",
-  "expected": "（可选）期望的产出形态"
+  "prompt": "(required) what remora should do, in one clear sentence",
+  "problem": "(optional) concrete symptom / error",
+  "files": ["(optional) relevant paths, relative to workspace root"],
+  "attempted": "(optional) what you already tried and why it failed",
+  "expected": "(optional) desired output shape"
 }
 ```
 
-只有 `prompt` 是必填的；其余字段会被拼进 remora 的 system prompt，给得越具体，诊断越准。**不要用 `Write` 落一个 task 文件** —— remora 自己会把这次任务持久化成 JSONL session（见下「session 留痕」），编排层无须代劳。
+Only `prompt` is required; the rest are folded into remora's system prompt — the more specific,
+the better the diagnosis. Do NOT `Write` a task file — remora persists the session itself (see
+Session persistence).
 
-### 2. 调起 CLI（task JSON 走 stdin）
+### 2. Run the CLI (task JSON via stdin)
 
-task JSON 通过 **stdin** 传入（用 heredoc），不经过 shell argv，天然免转义、不落盘：
+Pass the task JSON via **stdin** (heredoc) — no shell argv, no escaping, no disk write.
 
-一次 task 会驱动一个完整的非 Claude agent 跑多轮 LLM，**通常要几分钟**，常常超过单次前台 `Bash` 调用的超时上限。前台直跑会在 remora 完成前超时。因此**默认用后台 + 轮询**：
+A task drives a full non-Claude agent through many LLM turns; it **usually takes minutes**, often
+past the single-call `Bash` timeout ceiling. A foreground call would time out before remora
+finishes. So **default to background + poll**:
 
-**后台 + 轮询（推荐默认）** —— 用 `run_in_background: true` 启动，再用 `BashOutput` 反复轮询同一个 shell 直到进程退出，然后从最终 stdout 读结果：
+**Background + poll (default)** — start with `run_in_background: true`, then `BashOutput` the same
+shell repeatedly until the process exits, then read the final stdout:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" task <<'EOF'
-{ "prompt": "……", "files": ["……"], "expected": "……" }
+{ "prompt": "…", "files": ["…"], "expected": "…" }
 EOF
 ```
 
-持续轮询直至完成——跑 10 分钟以上也属正常，不要提前放弃、更不要把「仍在运行」之类进度文本当结果返回。需要中途取消用 `KillShell`。
+Poll until it exits — a 10+ minute run is normal. Do NOT give up early, and NEVER return a
+progress line ("still running") as the result. Use `KillShell` to cancel.
 
-**前台** —— 仅用于你确知会在秒级返回的极短任务；否则一律用后台 + 轮询。
+**Foreground** — only for tasks you know finish in seconds; otherwise always background + poll.
 
-可选 flag（resume 采用 Claude Code 风格）：
+Optional flags (Claude Code-style resume):
 
-- `--continue` / `-c` —— 在**当前 cwd 的最近一个 session** 上继续（追问、深入）。没有历史时等价于新建。
-- `--resume <id>` / `-r <id>` —— 续接指定的 session id（id 就是上一次结果里的 `sessionId`，或 stderr 进度流里 `session` 事件的 `id`）。
-- `--model <name>` —— 临时覆盖模型名（同一 provider 下切换）。
-- `--write` —— 允许 remora 写盘：额外开启 `bash` / `edit` / `write` 工具，让它直接落地修复。不带此 flag 时为只读调查模式（只有 `read` / `grep` / `find` / `ls`，无 `bash`）。**写模式有实际改盘副作用,仅在你确实想让 remora 动手修改时使用**。
+- `--continue` / `-c` — continue the **most recent session in the current cwd** (follow-up, deeper
+  dig). Equivalent to a new session when there's no history.
+- `--resume <id>` / `-r <id>` — resume a specific session id (the `sessionId` from the last result,
+  or the `session` event's `id` in the stderr stream).
+- `--model <name>` — temporarily override the model name (same provider).
+- `--write` — let remora write: adds `bash` / `edit` / `write` tools so it can land fixes directly.
+  Without it, read-only mode (`read` / `grep` / `find` / `ls`, no `bash`). **Write mode has real
+  disk side effects — use only when you actually want remora to make changes.**
 
-> 默认每次 task 都开一个**新 session**（新 UUID）。要"接着上一次聊"就用 `--continue`（省事）或 `--resume <上次的 sessionId>`（精确）——和 `claude -c` / `claude -r <id>` 一致。
+> Each task opens a **new session** (new UUID) by default. To continue the last one, use
+> `--continue` (easy) or `--resume <sessionId>` (precise) — same as `claude -c` / `claude -r <id>`.
 
-### 3. 读取结果
+### 3. Read the result
 
-- **stdout** 是唯一的结构化结果（JSON）：
+- **stdout** is the only structured result (JSON):
 
   ```jsonc
   {
-    "status": 0,                  // 0 成功 / 非 0 失败
-    "sessionId": "f49ff3e6-…",    // 本次 session 的 UUID；下次 --resume <sessionId> 续接
+    "status": 0,                  // 0 ok / non-zero fail
+    "sessionId": "f49ff3e6-…",    // this session's UUID; resume with --resume <sessionId>
     "sessionPath": "~/.pi/agent/sessions/…/<ts>_<id>.jsonl",
-    "finalMessage": "...",        // remora 的最终回答（Markdown），这是给用户的核心交付
+    "finalMessage": "...",        // remora's final answer (Markdown) — the core deliverable
     "errorMessage": null
   }
   ```
 
-  把 `finalMessage` 原样转达给用户（它是完整自包含的诊断/建议）。不要改写或加戏。若想接着上次继续，记下 `sessionId`，下次带 `--resume <sessionId>`。
+  Return `finalMessage` to the user verbatim (it's a complete, self-contained diagnosis). Do not
+  rewrite or embellish. To continue later, keep the `sessionId` and pass `--resume <sessionId>`.
 
-- **stderr** 是 NDJSON 进度流，每行一个事件。**第一行总是** `{"type":"session","id":"…","path":"…"}`（后台跑时据此尽早拿到 sessionId，供后续 `--resume`）；其后是 `agent_start` / `turn_start` / `tool_start` / `tool_end` / `turn_end` / `agent_end`。用于 `BashOutput`/`Monitor` 观察进度，不要当结果解析。
+- **stderr** is an NDJSON progress stream, one event per line. The **first line is always**
+  `{"type":"session","id":"…","path":"…"}` (grab the sessionId early when running in background, for
+  later `--resume`); then `agent_start` / `turn_start` / `tool_start` / `tool_end` / `turn_end` /
+  `agent_end`. For `BashOutput`/`Monitor` progress only — do not parse as the result.
 
-### 4. 错误处理
+### 4. Error handling
 
-CLI 非零退出时，stderr 末行是一个 `{"type":"error","message":"..."}` 对象，stdout 也会带 `errorMessage`。把原始错误透传给用户，并补一句 actionable next step：
+On non-zero exit, the stderr last line is `{"type":"error","message":"..."}` and stdout carries
+`errorMessage`. Pass the raw error through, plus an actionable next step:
 
-> remora 报错：`<message>`。请运行 `/remora:setup` 检查 provider 配置（baseUrl / model / API key）。
+> remora error: `<message>`. Run `/remora:setup` to check provider config (baseUrl / model / API key).
 
-## 配置来源（优先级高 → 低）
+## Config sources (high → low precedence)
 
-1. 环境变量：`REMORA_BASE_URL` / `REMORA_MODEL` / `REMORA_API_KEY`
-2. 工作区：`.remora/config.json`（legacy，仍支持）
-3. 全局：`~/.pi/remora.config.yaml`（新统一位置，YAML 格式）
-4. 全局 legacy：`~/.remora/config.json`（向后兼容）
+1. Env vars: `REMORA_BASE_URL` / `REMORA_MODEL` / `REMORA_API_KEY`
+2. Workspace: `.remora/config.json` (legacy, still supported)
+3. Global: `~/.pi/remora.config.yaml` (unified location, YAML)
+4. Global legacy: `~/.remora/config.json` (back-compat)
 
-`~/.pi/remora.config.yaml` 示例：
+`~/.pi/remora.config.yaml` example:
 
 ```yaml
 baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -104,32 +124,53 @@ provider: "dashscope"
 apiKey: "keychain:DASHSCOPE_API_KEY"
 ```
 
-`apiKey` 是一个**来源 spec 字符串**，声明 key 从哪取：
+`apiKey` is a **source spec string** declaring where the key comes from:
 
-- `keychain:SERVICE` —— 从 macOS keychain 读（`security find-generic-password -s SERVICE -a <当前用户> -w`）。account 默认当前登录用户；要指定别的 account 用 `keychain:SERVICE:ACCOUNT`。
-- `env:VAR` —— 从环境变量 `VAR` 读。
-- 裸 `VAR`（无前缀）—— 默认 env。
+- `keychain:SERVICE` — read from macOS keychain (`security find-generic-password -s SERVICE -a
+  <current user> -w`). Account defaults to the login user; use `keychain:SERVICE:ACCOUNT` to override.
+- `env:VAR` — read from env var `VAR`.
+- bare `VAR` (no prefix) — defaults to env.
 
-API key **不落盘明文**：优先级 `REMORA_API_KEY` 环境变量 > config `apiKey` spec > legacy `apiKeyEnv`（env-only，向后兼容）> `DASHSCOPE_API_KEY` 环境变量兜底。keychain 只在 macOS 生效。
+The API key is **never persisted in plaintext**: precedence `REMORA_API_KEY` env > config `apiKey`
+spec > legacy `apiKeyEnv` (env-only, back-compat) > `DASHSCOPE_API_KEY` env fallback. keychain is
+macOS-only.
 
-## 安全模型
+## Security model
 
-- 默认**只读**：不带 `--write` 时只挂 pi 的只读工具集 `read` / `grep` / `find` / `ls`，**不挂 `bash`**——与 pi 的 `createReadOnlyTools` 一致。
-- 带 `--write` 时额外开启 `bash` / `edit` / `write`，可改盘。工具实现直接来自 `@earendil-works/pi-coding-agent`（规范依赖，非自写）。
-- 所有文件操作限制在工作区根目录内，路径逃逸被 `beforeToolCall` 硬拦截：guard 先按 pi 的方式展开 `~/` 到 homedir、再 resolve，并对已存在路径做 `realpath`（防 in-root symlink 指向 root 外）。pi 的 `resolveToCwd` 只解析不收口，沙箱由 remora 注入。
-- pi 本身不内置权限沙箱，remora 的 `beforeToolCall` 是软门。`bash` 在写模式下放行任意命令；需要强隔离请在容器内运行。
+- **Read-only by default**: without `--write`, only pi's read-only tools `read` / `grep` / `find` /
+  `ls` — no `bash` (matches pi's `createReadOnlyTools`).
+- With `--write`, adds `bash` / `edit` / `write` (can modify disk). Tool impls come straight from
+  `@earendil-works/pi-coding-agent` (a proper dependency, not hand-rolled).
+- All file ops are confined to the workspace root; path escape is hard-blocked in `beforeToolCall`:
+  the guard expands `~/` to homedir the pi way, resolves, and `realpath`s existing paths (defeats
+  in-root symlinks pointing outside). pi's `resolveToCwd` only resolves; remora injects the sandbox.
+- pi has no built-in permission sandbox — remora's `beforeToolCall` is a soft gate. In write mode
+  `bash` allows arbitrary commands; run in a container if you need hard isolation.
 
-## session 留痕
+## Session persistence
 
-remora 像一个正经 agent 一样，把每次会话记成一条**可 replay 的 JSONL**（底层直接用 pi 自带的 `JsonlSessionRepo`，与 oh-my-pi 同源），而不是把消息数组塞进一个扁平 JSON。
+remora records each session as a **replayable JSONL** (via pi's own `JsonlSessionRepo`, same as
+oh-my-pi), not a flat JSON blob.
 
-- **位置**：集中存放在 `~/.pi/agent/sessions/<encoded-cwd>/` 下（与 Pi 共用同一目录结构——`pi --session` 可直接恢复 remora session），每个 session 一个 `{ISO时间戳}_{sessionId}.jsonl`，可被 `REMORA_SESSIONS_DIR` 覆盖根目录。**不再**写入项目内的 `.remora/sessions/`。旧 `~/.remora/projects/` 下的 session 需手动迁移到新位置（目录结构相同，直接 `mv`）。
-- **格式**：首行是 session 头 `{type:"session", version:3, id, timestamp, cwd}`；其后每行一个 typed entry：
-  - `message` —— 每条 user/assistant/tool 消息，**增量追加**（逐条原子写入，跑挂了已落盘的不丢）。
-  - `model_change` —— 起始时记一次 provider/model。
-  - `session_info` —— 从首条 prompt 派生的自动 title。
-  - `compaction` —— 上下文真正压缩时记一条（含 summary / tokensBefore），resume 时由 pi 重建为摘要。
-  - `custom`(`remora:agent`) —— 标记**本 session 由 remora 创建**（值 `"remora"`），以便 Pi 的 resume 界面中区分 remora vs pi session。
-  - `custom`(`remora:lineage`) —— 记录**派生这次 task 的宿主 Claude Code session id**（取自 `CLAUDE_CODE_SESSION_ID`），建立可追溯链；remora 在 CC 外手动跑时该 entry 不写。
-- **resume**：`--continue` 取该 cwd 最近一个；`--resume <id>` 取指定 id；续接时读回历史 entry 重建 `AgentMessage[]`，新轮次消息继续增量追加（不重写整个文件）。
-- **大图外化**：图片 block 的 base64（≥1 KiB）不塞进 JSONL，而是落到内容寻址 blob store（`~/.pi/remora/blobs/<sha256>`，自动去重），JSONL 里只存 `blob:sha256:<hash>` 引用——resume 时自动还原回 base64（对齐 oh-my-pi）。
+- **Location**: `~/.pi/agent/sessions/<encoded-cwd>/` (shared layout with Pi — `pi --session` can
+  restore a remora session), one `{ISO-ts}_{sessionId}.jsonl` per session; root overridable via
+  `REMORA_SESSIONS_DIR`. No longer written to the in-project `.remora/sessions/`. Old sessions under
+  `~/.remora/projects/` must be moved manually (same layout, just `mv`).
+- **Format**: first line is the session header `{type:"session", version:3, id, timestamp, cwd}`;
+  then one typed entry per line:
+  - `message` — each user/assistant/tool message, **appended incrementally** (atomic per-line write,
+    so a crash keeps what's already flushed).
+  - `model_change` — provider/model recorded once at start.
+  - `session_info` — auto title derived from the first prompt.
+  - `compaction` — recorded when context is actually compacted (with summary / tokensBefore); pi
+    rebuilds it as a summary on resume.
+  - `custom`(`remora:agent`) — marks the session as **remora-created** (value `"remora"`), to tell
+    remora vs pi sessions apart in Pi's resume UI.
+  - `custom`(`remora:lineage`) — records the **host Claude Code session id** that spawned this task
+    (from `CLAUDE_CODE_SESSION_ID`) for a traceable chain; not written when remora runs outside CC.
+- **Resume**: `--continue` takes the most recent in the cwd; `--resume <id>` takes a specific id;
+  resuming replays history entries into `AgentMessage[]`, then new turns keep appending (no full
+  rewrite).
+- **Large-image externalization**: image-block base64 (≥ 1 KiB) is not inlined into JSONL — it lands
+  in a content-addressed blob store (`~/.pi/remora/blobs/<sha256>`, auto-deduped); JSONL stores only
+  a `blob:sha256:<hash>` reference, restored to base64 on resume (matches oh-my-pi).

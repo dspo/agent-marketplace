@@ -1,6 +1,6 @@
 ---
-description: 把卡住的问题委托给 remora task agent（自包含、非 Claude 第二意见）
-argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [--write] [要 remora 调查或解决的问题]"
+description: Delegate a stuck problem to the remora task agent (self-contained, non-Claude second opinion)
+argument-hint: "[--background] [--continue | --resume <id>] [--model <name>] [--write] [problem for remora to investigate or solve]"
 allowed-tools: Bash(node:*), AskUserQuestion, Agent
 ---
 
