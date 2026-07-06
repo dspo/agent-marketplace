@@ -68,3 +68,32 @@ describe("task stdin contract", () => {
 		assert.match(lastError(r.stderr)?.message ?? "", /unknown command/);
 	});
 });
+
+describe("--cwd routing", () => {
+	it("exits 2 when --cwd points at a non-directory", async () => {
+		const r = await run(["--cwd", "/no/such/dir/remora-cwd-test", "task"], "");
+		assert.equal(r.code, 2);
+		assert.match(lastError(r.stderr)?.message ?? "", /--cwd is not a directory/);
+	});
+
+	it("exits 2 when --cwd has no value (trailing flag)", async () => {
+		const r = await run(["--cwd"], "");
+		assert.equal(r.code, 2);
+		assert.match(lastError(r.stderr)?.message ?? "", /--cwd needs a path/);
+	});
+
+	it("accepts a valid --cwd and proceeds to the task stdin contract", async () => {
+		// --cwd resolves; cwd validation passes, so the next gate is the task on
+		// stdin — empty stdin must surface the `no task on stdin` error, proving
+		// --cwd parsing did not short-circuit the normal task flow.
+		const r = await run(["--cwd", "/tmp", "task"], "");
+		assert.equal(r.code, 2);
+		assert.match(lastError(r.stderr)?.message ?? "", /no task on stdin/);
+	});
+
+	it("accepts --cwd after the subcommand (global position)", async () => {
+		const r = await run(["task", "--cwd", "/no/such/dir/remora-cwd-test"], "");
+		assert.equal(r.code, 2);
+		assert.match(lastError(r.stderr)?.message ?? "", /--cwd is not a directory/);
+	});
+});

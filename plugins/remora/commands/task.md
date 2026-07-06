@@ -41,6 +41,16 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" sessions list
 - If the user chooses continue, add `--continue` before routing to the subagent.
 - If the user chooses a new session, do not add `--continue` or `--resume`.
 - If the helper reports no sessions available (prints `(no sessions in this cwd)`), do not ask. Route normally.
+- **Skip this pre-check entirely when routing to a non-current workspace** (i.e. when you will pass `--worktree`/`--cwd` to the subagent — see Workspace routing). The session scope has moved to the target cwd, so `sessions list` against the current cwd is meaningless; let `--continue`/`--resume` or a natural-language "continue" cue decide instead.
+
+Workspace routing (the user does not type these — you supply them from context):
+
+- When the user's request targets a specific worktree or branch ("review PR X", "investigate on branch feat-x", "look at the feat-x worktree"), the main agent **must** pass the target workspace to the `remora:remora-task` subagent so remora runs in the right tree, not the main agent's current cwd. Put the routing flag in the prompt you hand the subagent (not in the task JSON):
+  - `--worktree <branch>` (preferred when the branch name is known) — the subagent resolves it to the worktree's absolute path via `git worktree list` and passes `--cwd` to the CLI.
+  - `--cwd <path>` (when the absolute path is already known) — passed straight through to the CLI.
+  - `--cwd` overrides `--worktree`.
+- When the target is the current cwd, pass neither.
+- These are routing controls — do not include them in the task text, and do not treat them as part of the natural-language task.
 
 Operating rules:
 

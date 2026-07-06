@@ -26,6 +26,7 @@ Raw arguments: `$ARGUMENTS`
 
 3. **Invoke remora for the adversarial pass**:
    - Spawn `remora:remora-task` via the `Agent` tool. Do NOT call `Skill(remora:task)` or `Skill(remora:remora-task)`. Do NOT pass `--write`.
+   - **Workspace routing is mandatory when the review target is not the current cwd**: if the PR/branch under review lives in a different worktree, you **must** put `--worktree <branch>` (preferred — the subagent resolves it to the worktree path via `git worktree list`) or `--cwd <path>` (when you already know the absolute worktree path) in the prompt you hand the subagent. Without this, remora reviews the main agent's current tree instead of the PR's tree. The user does not type these flags; you supply them from the context you gathered in step 1. `--cwd` overrides `--worktree`.
    - Give remora the full context **plus your initial verdict**, and ask it to review from an opposing, nitpicking angle and return its own mergeable/not-mergeable verdict with reasons.
    - remora is long-running (minutes). Its result is its real `finalMessage` — never a "still running" placeholder. If the spawned subagent returns a placeholder instead of remora's actual conclusion, treat that as a tooling failure: recover remora's real output before proceeding (its stdout JSON `finalMessage`, or `dump <id>` using the sessionId from the stderr `session` event), or invoke the remora CLI directly with background + `BashOutput` polling.
 
