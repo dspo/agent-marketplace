@@ -204,7 +204,16 @@ async function main(): Promise<void> {
 		emit(process.stderr, { type: "error", message: `--cwd is not a directory: ${cwd}` });
 		process.exit(2);
 	}
-	process.chdir(cwd);
+	// statSync confirms the path is a directory, but chdir can still fail on a
+	// directory without execute permission (EACCES) or a TOCTOU deletion between
+	// the two calls. Keep the error in the NDJSON contract instead of letting an
+	// uncaught throw escape.
+	try {
+		process.chdir(cwd);
+	} catch (err) {
+		emit(process.stderr, { type: "error", message: `cannot chdir to ${cwd}: ${(err as Error).message}` });
+		process.exit(2);
+	}
 
 	if (command === "setup") {
 		await runSetup();
