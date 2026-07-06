@@ -1,3 +1,7 @@
+import cac from "cac";
+import { statSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { loadConfig } from "./config.ts";
 import { formatSessionDumpText } from "./session-dump-format.ts";
 import { formatSessionHistoryMarkdown } from "./session-history-format.ts";
@@ -14,40 +18,34 @@ interface Task {
 	expected?: string;
 }
 
-interface CliArgs {
-	command: string;
-	write: boolean;
-	resumeMode: ResumeMode;
-	resumeId?: string;
-	model?: string;
+/**
+ * Parse argv with `cac`. Options are declared on the default command (we use
+ * `run: false`, so cac only parses — dispatch stays in `main()` to preserve the
+ * NDJSON `unknown command` error style). `--cwd` is a global flag: it may appear
+ * before or after the subcommand.
+ */
+interface ParsedOptions {
+	cwd?: string | true;
+	write?: boolean;
+	continue?: boolean;
+	resume?: string | true;
+	model?: string | true;
+	verbose?: boolean;
 }
 
-/**
- * Parse resume flags Claude Code style:
- *   `-c`/`--continue`         → reopen the most-recent session for this cwd
- *   `-r`/`--resume <id>`       → reopen a specific session by id
- *   (neither)                  → start a fresh session
- *
- * `--resume` with no following id sets `resumeMode: "id"` but leaves `resumeId`
- * unset — main() rejects that combo. This keeps `ResumeMode` a pure union (no
- * sentinel value leaks into the type). `--session`/the old `default` id are gone.
- */
-function parseArgs(argv: string[]): CliArgs {
-	const args: CliArgs = { command: argv[0] ?? "", write: false, resumeMode: "new" };
-	for (let i = 1; i < argv.length; i++) {
-		const a = argv[i];
-		if (a === "--write") args.write = true;
-		else if (a === "-c" || a === "--continue") args.resumeMode = "continue";
-		else if (a === "-r" || a === "--resume") {
-			args.resumeMode = "id";
-			const id = argv[i + 1];
-			if (id && !id.startsWith("-")) {
-				args.resumeId = id;
-				i++;
-			}
-		} else if (a === "--model") args.model = argv[++i];
-	}
-	return args;
+function parseArgv(argv: string[]): { args: string[]; options: ParsedOptions } {
+	const cli = cac("remora")
+		// `run: false` below means cac only parses — no subcommands are registered,
+		// so every option lives on the default command and is accepted in any
+		// position (before or after the subcommand name).
+		.option("--cwd <path>", "workspace root (absolute or relative to current dir)")
+		.option("--write", "enable write tools (bash/edit/write)")
+		.option("-c, --continue", "reopen the most-recent session for this cwd")
+		.option("-r, --resume <id>", "resume a specific session by id")
+		.option("--model <name>", "temporarily override the model name")
+		.option("--verbose", "full session dump");
+	const parsed = cli.parse(argv, { run: false });
+	return { args: parsed.args as string[], options: parsed.options as ParsedOptions };
 }
 
 /**
@@ -65,13 +63,16 @@ async function readStdin(): Promise<string> {
 	return Buffer.concat(chunks).toString("utf8");
 }
 
-/** Compose the system prompt from the structured task fields. */
-function buildSystemPrompt(task: Task): string {
+/** Compose the system prompt from the structured task fields and workspace root. */
+function buildSystemPrompt(task: Task, cwd: string): string {
 	const lines = [
 		"You are remora, a focused task agent invoked to make progress on a problem the primary agent is stuck on.",
 		"You operate in a read-only investigation mode unless told otherwise: read code, search, and reason.",
 		"Be concrete. Diagnose the root cause, then state the smallest correct fix. Cite files as path:line.",
 		"Return a direct, self-contained answer — your final message is the entire deliverable.",
+		"",
+		"## Workspace root",
+		cwd,
 	];
 	if (task.problem) lines.push(`\n## Problem\n${task.problem}`);
 	if (task.files?.length) lines.push(`\n## Relevant files\n${task.files.map((f) => `- ${f}`).join("\n")}`);
@@ -152,12 +153,12 @@ async function runSetup(): Promise<void> {
  * derived lifecycle status (complete/interrupted/aborted/error/pending) and
  * auto-title. For discovering what to `--resume`.
  */
-async function runSessions(subcommand?: string): Promise<void> {
+async function runSessions(cwd: string, subcommand?: string): Promise<void> {
 	if (subcommand !== "list" && subcommand !== undefined) {
 		emit(process.stderr, { type: "error", message: `unknown sessions subcommand: ${subcommand} (expected: list)` });
 		process.exit(2);
 	}
-	const items = await listSessions(process.cwd());
+	const items = await listSessions(cwd);
 	if (items.length === 0) {
 		process.stdout.write("(no sessions in this cwd)\n");
 		process.exit(0);
@@ -175,8 +176,8 @@ async function runSessions(subcommand?: string): Promise<void> {
  * Default: concise transcript (tool calls one-lined). `--verbose`: full dump
  * (system prompt / config / tool inventory / per-message blocks).
  */
-async function runDump(id: string, verbose: boolean): Promise<void> {
-	const { session } = await openOrCreateSession(process.cwd(), "id", id);
+async function runDump(cwd: string, id: string, verbose: boolean): Promise<void> {
+	const { session } = await openOrCreateSession(cwd, "id", id);
 	const messages = await loadAllMessages(session);
 	const text = verbose
 		? formatSessionDumpText({ messages })
@@ -186,28 +187,53 @@ async function runDump(id: string, verbose: boolean): Promise<void> {
 }
 
 async function main(): Promise<void> {
-	const args = parseArgs(process.argv.slice(2));
+	const { args, options } = parseArgv(process.argv);
+	const command = args[0] ?? "";
 
-	if (args.command === "setup") {
+	// `--cwd` overrides `process.cwd()` as the workspace root. Resolve to an
+	// absolute path so the bash tool's subprocess cwd and the sandbox root share
+	// one basis, then chdir so any code path still reading process.cwd() lands in
+	// the same place (subprocess.Popen(cwd=…) / WORKDIR semantics).
+	const cwdRaw = options.cwd;
+	if (cwdRaw === true) {
+		emit(process.stderr, { type: "error", message: "--cwd needs a path" });
+		process.exit(2);
+	}
+	const cwd = cwdRaw ? resolve(String(cwdRaw)) : process.cwd();
+	if (!statSync(cwd, { throwIfNoEntry: false })?.isDirectory()) {
+		emit(process.stderr, { type: "error", message: `--cwd is not a directory: ${cwd}` });
+		process.exit(2);
+	}
+	// statSync confirms the path is a directory, but chdir can still fail on a
+	// directory without execute permission (EACCES) or a TOCTOU deletion between
+	// the two calls. Keep the error in the NDJSON contract instead of letting an
+	// uncaught throw escape.
+	try {
+		process.chdir(cwd);
+	} catch (err) {
+		emit(process.stderr, { type: "error", message: `cannot chdir to ${cwd}: ${(err as Error).message}` });
+		process.exit(2);
+	}
+
+	if (command === "setup") {
 		await runSetup();
 		return;
 	}
-	if (args.command === "sessions") {
-		await runSessions(process.argv[3]);
+	if (command === "sessions") {
+		await runSessions(cwd, args[1]);
 		return;
 	}
-	if (args.command === "dump") {
-		const id = process.argv[3];
-		const verbose = process.argv.slice(4).includes("--verbose");
+	if (command === "dump") {
+		const id = args[1];
 		if (!id) {
 			emit(process.stderr, { type: "error", message: "dump needs a session id: `dump <id> [--verbose]`" });
 			process.exit(2);
 		}
-		await runDump(id, verbose);
+		await runDump(cwd, id, Boolean(options.verbose));
 		return;
 	}
-	if (args.command !== "task") {
-		emit(process.stderr, { type: "error", message: `unknown command: ${args.command || "(none)"}` });
+	if (command !== "task") {
+		emit(process.stderr, { type: "error", message: `unknown command: ${command || "(none)"}` });
 		process.exit(2);
 	}
 
@@ -229,19 +255,28 @@ async function main(): Promise<void> {
 		process.exit(2);
 	}
 
-	if (args.resumeMode === "id" && !args.resumeId) {
-		emit(process.stderr, { type: "error", message: "--resume needs a session id: use `--resume <id>` or `--continue`" });
-		process.exit(2);
+	let resumeMode: ResumeMode = "new";
+	let resumeId: string | undefined;
+	if (options.resume !== undefined) {
+		resumeMode = "id";
+		if (options.resume === true) {
+			emit(process.stderr, { type: "error", message: "--resume needs a session id: use `--resume <id>` or `--continue`" });
+			process.exit(2);
+		}
+		resumeId = options.resume;
+	} else if (options.continue) {
+		resumeMode = "continue";
 	}
+	const model = typeof options.model === "string" ? options.model : undefined;
 
 	try {
-		const result = await runTurn(process.cwd(), {
+		const result = await runTurn(cwd, {
 			prompt: task.prompt,
-			system: buildSystemPrompt(task),
-			write: args.write,
-			resumeMode: args.resumeMode,
-			resumeId: args.resumeId,
-			model: args.model,
+			system: buildSystemPrompt(task, cwd),
+			write: Boolean(options.write),
+			resumeMode,
+			resumeId,
+			model,
 			onProgress: (ev) => emit(process.stderr, ev),
 		});
 		process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

@@ -26,6 +26,16 @@ Forwarding rules:
 - Default to read-only mode. Only add `--write` when the command layer or user explicitly requests write mode.
 - Preserve the user's task text as-is apart from stripping routing flags.
 
+Workspace routing (`--cwd` / `--worktree`):
+
+- The main agent may pass `--cwd <path>` or `--worktree <branch>` in the prompt it hands you when the target workspace differs from the current cwd (e.g. reviewing a PR/branch whose worktree is elsewhere). These are **extension-layer routing flags — do NOT forward them to the remora CLI, and do NOT write them into the task JSON.** Resolve the target cwd yourself, then pass it to the CLI via `--cwd`.
+- Resolution (one Bash call before invoking remora):
+  - `--cwd <path>` given → use it directly as the `--cwd` value; do not resolve `--worktree`.
+  - else `--worktree <branch>` given → run `git worktree list --porcelain` in the current repo and pick the `worktree <path>` whose `branch` is `refs/heads/<branch>` (awk recipe in the `task` skill). The result is an absolute path. If there is no match or the current dir is not in a git repo, stop and report that the main agent must pass `--cwd <path>` instead; do not invoke remora.
+  - neither given → pass no `--cwd`; remora uses `process.cwd()`.
+- `--cwd` overrides `--worktree`: when both are present, resolve only `--cwd`.
+- Invoke as `node "${CLAUDE_PLUGIN_ROOT}/scripts/remora.mjs" --cwd "<path>" task <<'EOF' … EOF` (omit `--cwd` when no target was specified). Do not `cd` first — the harness handles the workspace root from `--cwd`. The `dump <id>` fallback uses the same `--cwd "<path>"`.
+
 Running remora and returning its result:
 
 A remora `task` is a long-running command — it drives a full non-Claude agent through many LLM turns and often runs several minutes, past the single-call `Bash` timeout ceiling. A foreground `Bash` call would time out before remora finishes. So run it in the background and poll:

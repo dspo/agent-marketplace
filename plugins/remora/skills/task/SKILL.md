@@ -77,6 +77,35 @@ Optional flags (Claude Code-style resume):
   Without it, read-only mode (`read` / `grep` / `find` / `ls`, no `bash`). **Write mode has real
   disk side effects — use only when you actually want remora to make changes.**
 
+Workspace routing flags (extension-layer; **not** user slash-command flags — the main agent passes
+them based on context, the user never types them):
+
+- `--cwd <path>` (**harness global flag**) — override `process.cwd()` as the workspace root. The
+  harness resolves it to an absolute path, `chdir`s into it, and injects it into the system prompt as
+  `## Workspace root`, so config loading, session storage, the file sandbox, and the model's relative
+  paths all key off this one value. Position is free: `remora.mjs --cwd <path> task` or
+  `remora.mjs task --cwd <path>`. Use this whenever the target workspace is not the current cwd.
+- `--worktree <branch>` (**extension-layer flag, NOT a harness flag**) — the `remora-task` subagent
+  resolves it to a worktree absolute path via `git worktree list --porcelain`, then passes that path
+  to the harness as `--cwd <path>`. `--cwd` overrides `--worktree` (when both are present, only
+  `--cwd` is used). detached-HEAD worktrees have no branch line — use `--cwd` for those.
+
+  Resolution recipe (run in the current repo; prints the worktree path for `<branch>`, or empty):
+
+  ```bash
+  git worktree list --porcelain | awk -v name="<branch>" '
+    /^worktree / { wt = $2 }
+    /^branch /   { if ($2 == "refs/heads/" name) print wt }
+  '
+  ```
+
+  If the output is empty (no match, or not in a git repo), the subagent reports that `--cwd <path>`
+  must be passed instead and does not invoke remora.
+
+Note: the harness `resolve()`s `--cwd` to an absolute path and `chdir`s, so passing a relative path
+is safe; `--worktree`'s resolved path is already absolute (git prints absolute worktree paths). The
+task JSON schema is unchanged — `--cwd` / `--worktree` are CLI routing flags, not JSON fields.
+
 > Each task opens a **new session** (new UUID) by default. To continue the last one, use
 > `--continue` (easy) or `--resume <sessionId>` (precise) — same as `claude -c` / `claude -r <id>`.
 
