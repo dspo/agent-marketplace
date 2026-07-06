@@ -112,9 +112,8 @@ On non-zero exit, the stderr last line is `{"type":"error","message":"..."}` and
 ## Config sources (high → low precedence)
 
 1. Env vars: `REMORA_BASE_URL` / `REMORA_MODEL` / `REMORA_API_KEY`
-2. Workspace: `.remora/config.json` (legacy, still supported)
-3. Global: `~/.pi/remora.config.yaml` (unified location, YAML)
-4. Global legacy: `~/.remora/config.json` (back-compat)
+2. Global: `~/.pi/remora.config.yaml` (unified location, YAML)
+3. Global legacy: `~/.remora/config.json` (back-compat)
 
 `~/.pi/remora.config.yaml` example:
 

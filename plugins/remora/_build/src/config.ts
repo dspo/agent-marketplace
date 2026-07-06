@@ -60,18 +60,16 @@ function readJsonIfExists(path: string): ConfigFile | undefined {
 /**
  * Load provider config. Precedence (high → low):
  *   1. env (REMORA_BASE_URL / REMORA_MODEL / REMORA_API_KEY) + modelOverride
- *   2. workspace .remora/config.json (legacy, still supported)
- *   3. global ~/.pi/remora.config.yaml (new unified location)
- *   4. global ~/.remora/config.json (legacy fallback)
+ *   2. global ~/.pi/remora.config.yaml (unified location)
+ *   3. global ~/.remora/config.json (legacy fallback)
  *
  * Spread order means later objects override earlier ones, so the effective
- * priority for any single field is: env > workspace > ~/.pi yaml > ~/.remora json.
+ * priority for any single field is: env > ~/.pi yaml > ~/.remora json.
  */
-export function loadConfig(cwd: string, modelOverride?: string): ProviderConfig {
+export function loadConfig(modelOverride?: string): ProviderConfig {
 	const legacyGlobal = readJsonIfExists(join(homedir(), ".remora", "config.json"));
 	const piYaml = readYamlIfExists(join(homedir(), ".pi", "remora.config.yaml"));
-	const legacyWorkspace = readJsonIfExists(join(cwd, ".remora", "config.json"));
-	const file: ConfigFile = { ...legacyGlobal, ...piYaml, ...legacyWorkspace };
+	const file: ConfigFile = { ...legacyGlobal, ...piYaml };
 
 	const baseUrl = process.env.REMORA_BASE_URL ?? file.baseUrl;
 	const model = modelOverride ?? process.env.REMORA_MODEL ?? file.model;
