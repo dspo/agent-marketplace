@@ -47,7 +47,7 @@ export interface TurnResult {
 
 /** Run a single task turn end-to-end and return a structured result. */
 export async function runTurn(cwd: string, opts: RunTurnOptions): Promise<TurnResult> {
-	const cfg = loadConfig(cwd, opts.model);
+	const cfg = loadConfig(opts.model);
 
 	const { session, metadata, isNew } = await openOrCreateSession(cwd, opts.resumeMode, opts.resumeId);
 	opts.onProgress({ type: "session", id: metadata.id, path: metadata.path });

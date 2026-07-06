@@ -116,7 +116,7 @@ async function runSetup(): Promise<void> {
 
 	let cfg: ReturnType<typeof loadConfig>;
 	try {
-		cfg = loadConfig(process.cwd());
+		cfg = loadConfig();
 	} catch (err) {
 		report.ready = false;
 		report.message = `config error: ${(err as Error).message}`;

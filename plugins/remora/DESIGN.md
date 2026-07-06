@@ -148,9 +148,8 @@ async function main() {
 
 配置来源（优先级从高到低）：
 1. 命令行 `--model` / 环境变量 `REMORA_BASE_URL` / `REMORA_API_KEY` / `REMORA_MODEL`
-2. workspace 配置：`.remora/config.json`（legacy，仍支持）
-3. 全局配置：`~/.pi/remora.config.yaml`（新统一位置）
-4. 全局 legacy：`~/.remora/config.json`（向后兼容）
+2. 全局配置：`~/.pi/remora.config.yaml`（新统一位置）
+3. 全局 legacy：`~/.remora/config.json`（向后兼容）
 
 > **已验证的关键事实（spike 实测）**：pi-ai 的 `getModel(provider, modelId)` 只接受**两个参数**，且是对静态注册表 `MODELS.generated.ts` 的**强类型查表**——**不接受 baseUrl/apiKey，也不接受表外的任意 model id**。自定义 OpenAI 兼容端点（DashScope 等）不在注册表里，**走不通 `getModel`**。
 >
@@ -320,7 +319,7 @@ remora 的 session 留痕**直接复用上游 pi 自带的 session 体系**（`@
 
 | 命令 | 行为 |
 | --- | --- |
-| `/remora:setup` | 检查 Node 版本 + 校验 `REMORA_*` / `~/.pi/remora.config.yaml` / `.remora/config.json` + 用 pi-ai 试发一次最小请求验证连通性与鉴权 |
+| `/remora:setup` | 检查 Node 版本 + 校验 `REMORA_*` / `~/.pi/remora.config.yaml` + 用 pi-ai 试发一次最小请求验证连通性与鉴权 |
 | `/remora:task` | 触发 task skill（打包上下文 → 调 CLI → 读结果） |
 
 > 不再需要 `status` / `result` / `cancel` 命令——这些在 mimo 里是自造 job 系统的查询接口。remora 复用 Claude Code 的 background-shell：进度看 `BashOutput`、取消用 `KillShell`，无需插件自己实现。
