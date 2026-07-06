@@ -10,7 +10,7 @@ Raw arguments: `$ARGUMENTS`
 
 ## Arguments
 
-- `--auto-merge`: only when explicitly passed, auto squash-merge and clean up the remote branch / local worktree; without it, just report the verdict.
+- `--auto-merge`: only when explicitly passed, auto squash-merge and clean up the remote branch / local worktree; without it, just report the verdict. The authorization to merge is scoped to **the turn in which the flag is issued** — see Notes for the cross-turn boundary.
 - `prompt`: optional — a PR/MR link, branch name, or extra context (background, design trade-offs, acceptance criteria, original requirements).
 
 ## Flow
@@ -45,4 +45,4 @@ Raw arguments: `$ARGUMENTS`
 
 - Read-only by default; do not modify files or branches.
 - If remora fails to run, tell the user to run `/remora:setup` to check config.
-- `--auto-merge` counts as user authorization — do not ask for confirmation again.
+- `--auto-merge` counts as user authorization to merge **in the same turn the flag is issued** — do not ask for confirmation again within that turn. A *turn* is one user message and the agent's continuous response to it: multiple adversarial rounds within a single agent invocation count as the same turn, but once the agent yields control back to the user — including the user sending any follow-up message, or context compaction ending the response — the turn ends. The authorization does **not** carry across turns: if the merge is not executed before the turn ends (e.g. the adversarial loop spans multiple turns, context is compacted, remora hangs, or the agent yields back to the user), re-confirm via `AskUserQuestion` (present the verdict and ask whether to merge now) before executing any git operations in a later turn. The user authorized merging based on that turn's context (diff, verdict, sparring progress); past a turn boundary the context may have changed, so the prior authorization is no longer valid. (Runtime enforcement — tracking which turn the flag was issued in across compaction — is out of scope for a markdown skill; the `AskUserQuestion` re-confirmation is the practical mitigation.)
