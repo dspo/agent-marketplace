@@ -1,6 +1,6 @@
 ---
 name: deliver
-description: 实现需求并交付 PR/MR —— 新建或继续 branch，实现变更，推送并创建/更新 PR/MR（GitHub / GitLab 通用）
+description: 实现需求并交付 PR/MR —— 新建或继续 branch，实现变更，推送并创建/更新 PR/MR，可选合并并清理 worktree（GitHub / GitLab 通用）
 ---
 
 # 实现需求并交付 PR/MR
@@ -125,6 +125,39 @@ glab ci trace <pipeline-id>
 
 # 根据失败原因修复，提交推送更新 PR/MR
 ```
+
+### 7. 合并 PR/MR 并清理 worktree
+
+> **强制要求**：合并（`gh pr merge` / `glab mr merge`）**必须在 root worktree 中执行，严禁在 feature worktree 内执行**。`gh pr merge` 会尝试 checkout 默认分支，而该分支已被 root worktree 占用，在 feature worktree 内执行会报 `fatal: '<branch>' is already used by worktree`。feature worktree 仅用于实现阶段（见步骤 3）。
+
+待所有 Checks 通过、review 已获准后：
+
+```bash
+# 回到 root worktree 并同步默认分支（绝不在 feature worktree 内执行 merge）
+cd <root-worktree-directory>
+git checkout <default-branch>
+git pull origin <default-branch>
+
+# 合并（GitHub，按平台惯例选 squash / merge / rebase）
+gh pr merge <pr-id> --squash --delete-branch
+
+# 合并（GitLab）
+glab mr merge <mr-id> --squash
+
+# 用 PR/MR 状态确认合并结果——不要依赖 merge 命令的退出码
+# （merge 命令在 worktree race 等场景下可能报错但实际已合并）
+gh pr view <pr-id> --json state,mergeCommit -q '"\(.state) \(.mergeCommit.oid)"'   # GitHub
+glab mr view <mr-id> --json state,merge_status                                     # GitLab
+```
+
+确认 `state` 为 `MERGED` / `merged` 后，再清理 feature worktree：
+
+```bash
+git worktree remove ../<root-worktree-name>--<branch-slug>
+git branch -D <branch-name>   # 远端分支已由 --delete-branch 删除
+```
+
+> **不要**在合并结果未确认时就 `worktree remove`：若 merge 实际未完成，提前清理 worktree 会丢失未推送的本地修复。先 `--json state` 确认，再清理。
 
 ## 交付物
 
