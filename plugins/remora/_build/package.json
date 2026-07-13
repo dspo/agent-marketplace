@@ -1,6 +1,6 @@
 {
-  "name": "@huayi/remora-plugin-cc",
-  "version": "0.1.0",
+  "name": "@dspo/remora-plugin-cc",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Self-contained task agent for Claude Code — embeds the pi agent harness, no third-party CLI required.",

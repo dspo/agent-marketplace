@@ -28,11 +28,13 @@ Raw arguments: `$ARGUMENTS`
    - Spawn `remora:remora-task` via the `Agent` tool. Do NOT call `Skill(remora:task)` or `Skill(remora:remora-task)`. Do NOT pass `--write`.
    - **Workspace routing is mandatory when the review target is not the current cwd**: if the PR/branch under review lives in a different worktree, you **must** put `--worktree <branch>` (preferred — the subagent resolves it to the worktree path via `git worktree list`) or `--cwd <path>` (when you already know the absolute worktree path) in the prompt you hand the subagent. Without this, remora reviews the main agent's current tree instead of the PR's tree. The user does not type these flags; you supply them from the context you gathered in step 1. `--cwd` overrides `--worktree`.
    - Give remora the full context **plus your initial verdict**, and ask it to review from an opposing, nitpicking angle and return its own mergeable/not-mergeable verdict with reasons.
+   - **Verbatim-citation rule (hand this to remora as part of the task)**: for each blocking (not-mergeable) issue it raises, remora must quote the verbatim lines from the diff and cite `file:line`. A blocking issue without a verbatim quotation from the actual diff is not a valid blocking issue — remora must drop it or downgrade it to a nit. This anchors every blocking finding to real diff text so a misaligned or fabricated line number is immediately checkable.
    - remora is long-running (minutes). Its result is its real `finalMessage` — never a "still running" placeholder. If the spawned subagent returns a placeholder instead of remora's actual conclusion, treat that as a tooling failure: recover remora's real output before proceeding (its stdout JSON `finalMessage`, or `dump <id>` using the sessionId from the stderr `session` event), or invoke the remora CLI directly with background + `BashOutput` polling.
 
 4. **Adversarial loop**:
    - Read remora's `finalMessage` carefully.
-   - For each of its points: accept and fix, or rebut with reasons.
+   - For each of its points: accept and fix, or rebut with reasons. Before accepting any blocking finding, verify its verbatim quotation against the actual PR diff (`gh pr diff` or `git diff` against the merge base) — confirm the quoted lines exist and the `file:line` lines up. If the quotation does not match the real diff, treat it as a misread and rebut with the actual code.
+   - State this round's verdict: mergeable / not mergeable / keep discussing.
    - State this round's verdict: mergeable / not mergeable / keep discussing.
    - Send the updated context and your response back to remora for the next round.
    - When both sides agree it's mergeable — or you judge that remora has no valid blocking objection — you decide, as the stronger party.

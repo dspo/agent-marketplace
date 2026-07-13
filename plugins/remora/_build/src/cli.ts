@@ -9,6 +9,9 @@ import { listSessions } from "./session-listing.ts";
 import { loadAllMessages, openOrCreateSession, type ResumeMode } from "./session.ts";
 import { runTurn } from "./runtime.ts";
 
+/** Build identity stamped into the bundle by `build.mjs` (rev/date/version). */
+declare const REMORA_BUILD: { rev: string; date: string; version: string };
+
 /** The structured task, authored by the calling agent (see SKILL.md). */
 interface Task {
 	prompt: string;
@@ -31,6 +34,7 @@ interface ParsedOptions {
 	resume?: string | true;
 	model?: string | true;
 	verbose?: boolean;
+	version?: boolean;
 }
 
 function parseArgv(argv: string[]): { args: string[]; options: ParsedOptions } {
@@ -43,7 +47,8 @@ function parseArgv(argv: string[]): { args: string[]; options: ParsedOptions } {
 		.option("-c, --continue", "reopen the most-recent session for this cwd")
 		.option("-r, --resume <id>", "resume a specific session by id")
 		.option("--model <name>", "temporarily override the model name")
-		.option("--verbose", "full session dump");
+		.option("--verbose", "full session dump")
+		.option("-V, --version", "print build identity (rev/date/version) and exit");
 	const parsed = cli.parse(argv, { run: false });
 	return { args: parsed.args as string[], options: parsed.options as ParsedOptions };
 }
@@ -106,6 +111,7 @@ async function runSetup(): Promise<void> {
 	const report: Record<string, unknown> = {
 		node: process.versions.node,
 		nodeOk: nodeVersionOk(),
+		build: REMORA_BUILD,
 	};
 
 	if (!report.nodeOk) {
@@ -189,6 +195,13 @@ async function runDump(cwd: string, id: string, verbose: boolean): Promise<void>
 async function main(): Promise<void> {
 	const { args, options } = parseArgv(process.argv);
 	const command = args[0] ?? "";
+
+	// `version` / `--version` short-circuit before `--cwd` validation: printing
+	// build identity must not require a valid workspace root.
+	if (command === "version" || options.version) {
+		process.stdout.write(`${JSON.stringify(REMORA_BUILD, null, 2)}\n`);
+		process.exit(0);
+	}
 
 	// `--cwd` overrides `process.cwd()` as the workspace root. Resolve to an
 	// absolute path so the bash tool's subprocess cwd and the sandbox root share
