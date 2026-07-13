@@ -119,3 +119,18 @@ describe("resume routing", () => {
 		assert.match(lastError(r.stderr)?.message ?? "", /session not found/);
 	});
 });
+
+describe("version", () => {
+	// `--version` / `version` short-circuit before --cwd validation and stdin
+	// reading; both must exit 0 so a stale-bundle check never depends on a valid
+	// workspace. The harness ignores stdout, so we assert the exit code only.
+	it("exits 0 on --version flag", async () => {
+		const r = await run(["--version"], null);
+		assert.equal(r.code, 0);
+	});
+
+	it("exits 0 on version subcommand", async () => {
+		const r = await run(["version"], null);
+		assert.equal(r.code, 0);
+	});
+});

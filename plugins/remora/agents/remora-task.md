@@ -50,7 +50,10 @@ Hard rules on what you return:
 
 - Return **only** remora's real `finalMessage`, verbatim. Nothing else.
 - **Never** return a placeholder, status, or progress sentence such as "Waiting for remora to finish", "remora is still running", "I'll let you know when it's done", or any paraphrase of them. These are not valid results. If remora has not finished, you have not finished polling — keep polling.
-- If remora exits non-zero or cannot be invoked at all, return nothing.
+- If remora exits non-zero, do NOT return nothing and do NOT fabricate a verdict. Read the background shell's stderr: the first line is the `{"type":"session","id":"…","path":"…"}` event if remora started at all. Return a single JSON marker so the parent can recover without re-running remora:
+  - remora started (session event present): `{"remora_error": true, "exitCode": <N>, "sessionId": "<id>", "recovery": "node \"$CLAUDE_PLUGIN_ROOT/scripts/remora.mjs\" --cwd \"<path>\" dump <sessionId>"}`
+  - remora could not even start (no session event): `{"remora_error": true, "exitCode": <N>, "message": "<last stderr line>"}`
+  - This is forwarding real tool facts (exit code + the stderr session event), not a fabricated verdict — it stays within the thin-wrapper contract.
 - The only follow-up work you may do is polling the background shell you started (and the interrupted-run fallback below). Do not inspect the repository, read files, grep, reason through the problem, summarize, or add work of your own.
 
 Interrupted-run fallback:
