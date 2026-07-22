@@ -10,42 +10,21 @@ Raw arguments: `$ARGUMENTS`
 
 ## Arguments
 
-- `--auto-merge`: only when explicitly passed, auto squash-merge and clean up the remote branch / local worktree; without it, just report the verdict. The authorization to merge is scoped to **the turn in which the flag is issued** — see Notes for the cross-turn boundary.
-- `prompt`: optional — a PR/MR link, branch name, or extra context (background, design trade-offs, acceptance criteria, original requirements).
+- `--auto-merge`: auto squash-merge and clean up remote branch / local worktree. Without it, just report verdict. Authorization scoped to the turn it's issued — ends when agent yields control back to the user.
+- `prompt`: optional — PR/MR link, branch name, or extra context.
 
 ## Flow
 
-1. **Gather and summarize context yourself** (never just hand over a diff):
-   - `prompt` is a PR/MR link → read its title, description, comments, diff.
-   - `prompt` is a branch name → read `git log` / `git diff`.
-   - `prompt` empty or free-form → use the current working tree.
-   - Also review this session's history for the original requirement, design background, trade-offs, and constraints.
-   - Fold it all into one complete, structured context.
-
-2. **Do your own initial review**: correctness, edge cases, error handling, maintainability; check for project-convention violations (see `.claude/rules/`). Form your own mergeable/not-mergeable verdict with reasons.
-
-3. **Invoke remora for the adversarial pass**:
-   - Spawn `remora:remora-task` via the `Agent` tool. Do NOT call `Skill(remora:task)` or `Skill(remora:remora-task)`. Do NOT pass `--write`.
-   - **Workspace routing is mandatory when the review target is not the current cwd**: if the PR/branch under review lives in a different worktree, you **must** put `--worktree <branch>` (preferred — the subagent resolves it to the worktree path via `git worktree list`) or `--cwd <path>` (when you already know the absolute worktree path) in the prompt you hand the subagent. Without this, remora reviews the main agent's current tree instead of the PR's tree. The user does not type these flags; you supply them from the context you gathered in step 1. `--cwd` overrides `--worktree`.
-   - Give remora the full context **plus your initial verdict**, and ask it to review from an opposing, nitpicking angle and return its own mergeable/not-mergeable verdict with reasons.
-   - **Verbatim-citation rule (hand this to remora as part of the task)**: for each blocking (not-mergeable) issue it raises, remora must quote the verbatim lines from the diff and cite `file:line`. A blocking issue without a verbatim quotation from the actual diff is not a valid blocking issue — remora must drop it or downgrade it to a nit. This anchors every blocking finding to real diff text so a misaligned or fabricated line number is immediately checkable.
-   - remora is long-running (minutes). Its result is its real `finalMessage` — never a "still running" placeholder. If the spawned subagent returns a placeholder instead of remora's actual conclusion, treat that as a tooling failure: recover remora's real output before proceeding (its stdout JSON `finalMessage`, or `dump <id>` using the sessionId from the stderr `session` event), or invoke the remora CLI directly with background + `BashOutput` polling.
-
-4. **Adversarial loop**:
-   - Read remora's `finalMessage` carefully.
-   - For each of its points: accept and fix, or rebut with reasons. Before accepting any blocking finding, verify its verbatim quotation against the actual PR diff (`gh pr diff` or `git diff` against the merge base) — confirm the quoted lines exist and the `file:line` lines up. If the quotation does not match the real diff, treat it as a misread and rebut with the actual code.
-   - State this round's verdict: mergeable / not mergeable / keep discussing.
-   - State this round's verdict: mergeable / not mergeable / keep discussing.
-   - Send the updated context and your response back to remora for the next round.
-   - When both sides agree it's mergeable — or you judge that remora has no valid blocking objection — you decide, as the stronger party.
-
+1. **Gather context**: From PR link / branch / session history — fold into one structured context.
+2. **Your own review**: Form a mergeable/not-mergeable verdict with reasons. Check `.claude/rules/` for project conventions.
+3. **Invoke remora** via `Agent` (`remora:remora-task`). Do NOT use `Skill`. Do NOT pass `--write`.
+   - When target is not current cwd, pass `--worktree <branch>` or `--cwd <path>` in the subagent prompt.
+   - Give remora your context + initial verdict; ask it to review from an opposing, nitpicking angle.
+   - **Verbatim-citation rule**: Each blocking issue must quote verbatim diff lines with `file:line`. A blocking issue without a verbatim diff quotation is invalid — downgrade to a nit.
+4. **Adversarial loop**: Read remora's `finalMessage`. For each point: accept+fix or rebut. Verify blocking findings' verbatim quotes against actual PR diff. State round verdict. Send updated context back to remora. You decide, as the stronger party, when no valid blocking objection remains.
 5. **Terminate**:
-   - Without `--auto-merge`: output the verdict and reasons; suggest merging manually or rerunning with `--auto-merge`.
-   - With `--auto-merge` and a mergeable verdict: squash-merge → commit → push base → delete remote branch → clean up local worktree/branch. Stop and report on the first failed step.
-   - Not-mergeable verdict: output the blocking issues; do not run any git operations.
+   - Without `--auto-merge`: output verdict + reasons.
+   - With `--auto-merge` + mergeable: squash-merge → push → delete remote branch → clean up local worktree/branch. Stop on first failure.
+   - Not mergeable: output blocking issues; no git operations.
 
-## Notes
-
-- Read-only by default; do not modify files or branches.
-- If remora fails to run, tell the user to run `/remora:setup` to check config.
-- `--auto-merge` counts as user authorization to merge **in the same turn the flag is issued** — do not ask for confirmation again within that turn. A *turn* is one user message and the agent's continuous response to it: multiple adversarial rounds within a single agent invocation count as the same turn, but once the agent yields control back to the user — including the user sending any follow-up message, or context compaction ending the response — the turn ends. The authorization does **not** carry across turns: if the merge is not executed before the turn ends (e.g. the adversarial loop spans multiple turns, context is compacted, remora hangs, or the agent yields back to the user), re-confirm via `AskUserQuestion` (present the verdict and ask whether to merge now) before executing any git operations in a later turn. The user authorized merging based on that turn's context (diff, verdict, sparring progress); past a turn boundary the context may have changed, so the prior authorization is no longer valid. (Runtime enforcement — tracking which turn the flag was issued in across compaction — is out of scope for a markdown skill; the `AskUserQuestion` re-confirmation is the practical mitigation.)
+Read-only by default. If remora fails, suggest `/remora:setup`.
