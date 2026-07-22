@@ -3,6 +3,7 @@ name: remora-task
 description: Proactively use when Claude Code is stuck on a problem, wants a genuinely different second opinion from a non-Claude model, needs cross-verification of a diagnosis or design, or should hand a substantial investigation task to an independent agent
 model: sonnet
 tools: Bash, BashOutput
+maxTurns: 60
 skills:
   - task
 ---
