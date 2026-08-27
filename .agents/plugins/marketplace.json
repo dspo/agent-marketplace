@@ -65,6 +65,19 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Developer Tools"
+    },
+    {
+      "name": "hol-guard",
+      "description": "Local AI harness runtime protection with HOL Guard",
+      "source": {
+        "source": "local",
+        "path": "./plugins/hol-guard"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
     }
   ]
 }
