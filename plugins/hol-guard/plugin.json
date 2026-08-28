@@ -1,0 +1,5 @@
+{
+  "name": "hol-guard",
+  "description": "Local AI harness runtime protection with HOL Guard — guarded setup, dry-run verification, approvals, and evidence",
+  "version": "1.0.0"
+}

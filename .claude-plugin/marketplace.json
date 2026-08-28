@@ -30,6 +30,11 @@
       "name": "remora",
       "description": "Self-contained task agent — embeds pi agent harness, uses non-Claude models for cross-validation and second opinions, no third-party CLI required",
       "source": "./plugins/remora"
+    },
+    {
+      "name": "hol-guard",
+      "description": "Local AI harness runtime protection with HOL Guard — guarded setup, dry-run verification, approvals, receipts, and fail-closed agent workflows",
+      "source": "./plugins/hol-guard"
     }
   ]
 }
